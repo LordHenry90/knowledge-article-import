@@ -101,7 +101,7 @@ def process_docx(file_path, output_path):
                             run_style += 'font-weight:bold;'
                         if run.italic:
                             run_style += 'font-style:italic;'
-                        if run.font.name:
+                        if run.font and run.font.name:
                             run_style += f'font-family:{run.font.name};'
                         if run_style:
                             html_content += f'<span style="{run_style}">{run.text}</span>'
