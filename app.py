@@ -82,7 +82,7 @@ def process_docx(file_path, output_path):
 
         # Extract content from DOCX using mammoth
         with open(file_path, "rb") as docx_file:
-            result = mammoth.convert_to_html(docx_file)
+            result = mammoth.convert_to_html(docx_file, convert_list_to_html=True)
             html_content = result.value  # The generated HTML
 
         # Create HTML file
