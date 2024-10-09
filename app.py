@@ -106,23 +106,30 @@ def process_docx(file_path, output_path):
 
         # Post-process HTML to fix list numbering using BeautifulSoup and python-docx
         soup = BeautifulSoup(html_content, 'html.parser')
+        if not soup.body:
+            body_tag = soup.new_tag('body')
+            soup.append(body_tag)
+        else:
+            body_tag = soup.body
+
         for para in doc.paragraphs:
             if para.style.name in ['List Paragraph', 'List Number']:  # Handle both bullet and numbered lists
-                list_items = [run.text for run in para.runs]
-                if para.style.name == 'List Number':
-                    new_ol = soup.new_tag('ol')
-                    for item in list_items:
-                        li = soup.new_tag('li')
-                        li.string = item
-                        new_ol.append(li)
-                    soup.body.append(new_ol)
-                else:
-                    new_ul = soup.new_tag('ul')
-                    for item in list_items:
-                        li = soup.new_tag('li')
-                        li.string = item
-                        new_ul.append(li)
-                    soup.body.append(new_ul)
+                list_items = [run.text for run in para.runs if run.text.strip()]
+                if list_items:
+                    if para.style.name == 'List Number':
+                        new_ol = soup.new_tag('ol')
+                        for item in list_items:
+                            li = soup.new_tag('li')
+                            li.string = item
+                            new_ol.append(li)
+                        body_tag.append(new_ol)
+                    else:
+                        new_ul = soup.new_tag('ul')
+                        for item in list_items:
+                            li = soup.new_tag('li')
+                            li.string = item
+                            new_ul.append(li)
+                        body_tag.append(new_ul)
 
         # Convert the modified soup back to HTML
         html_content = str(soup)
