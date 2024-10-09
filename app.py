@@ -103,14 +103,20 @@ def process_docx(file_path, output_path):
                             run_style += 'font-style:italic;'
                         if run.font and run.font.name:
                             run_style += f'font-family:{run.font.name};'
-                        if run.hyperlink:
-                            hyperlink = run.hyperlink.target
-                            html_content += f'<a href="{hyperlink}">'
+
+                        # Check if the run is part of a hyperlink
+                        hyperlink = run.element.find('.//w:hyperlink', namespaces={'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'})
+                        if hyperlink is not None:
+                            r_id = hyperlink.get(qn('r:id'))
+                            hyperlink_target = doc.part.related_parts[r_id].target if r_id else ''
+                            html_content += f'<a href="{hyperlink_target}">'
+
                         if run_style:
                             html_content += f'<span style="{run_style}">{run.text}</span>'
                         else:
                             html_content += f'{run.text}'
-                        if run.hyperlink:
+
+                        if hyperlink is not None:
                             html_content += '</a>'
                     html_content += '</p>'
 
