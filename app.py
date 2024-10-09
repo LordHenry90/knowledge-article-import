@@ -8,6 +8,7 @@ from PIL import Image
 import csv
 import re
 import logging
+from bs4 import BeautifulSoup
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -84,6 +85,17 @@ def process_docx(file_path, output_path):
         with open(file_path, "rb") as docx_file:
             result = mammoth.convert_to_html(docx_file)
             html_content = result.value  # The generated HTML
+
+        # Post-process HTML to fix list numbering using BeautifulSoup
+        soup = BeautifulSoup(html_content, 'html.parser')
+        ordered_lists = soup.find_all('ol')
+        for ol in ordered_lists:
+            list_items = ol.find_all('li')
+            for index, li in enumerate(list_items, start=1):
+                li['value'] = str(index)
+
+        # Convert the modified soup back to HTML
+        html_content = str(soup)
 
         # Create HTML file
         html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
