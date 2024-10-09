@@ -91,10 +91,17 @@ def process_docx(file_path, output_path):
         for para in doc.paragraphs:
             # Add text with formatting for headings and paragraphs
             if para.text.strip():
+                style = ''
                 if para.style.name.startswith('Heading'):
                     html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
                 else:
-                    html_content += f'<p>{para.text}</p>'
+                    if para.style.font.bold:
+                        style += 'font-weight:bold;'
+                    if para.style.font.italic:
+                        style += 'font-style:italic;'
+                    if para.style.font.name:
+                        style += f'font-family:{para.style.font.name};'
+                    html_content += f'<p style="{style}">{para.text}</p>'
             # Check for images in the runs of the paragraph
             for run in para.runs:
                 if run.element.findall('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}):
@@ -108,6 +115,14 @@ def process_docx(file_path, output_path):
                         with open(img_path, 'wb') as img_file:
                             img_file.write(image_part.blob)
                         html_content += f'<img src="images/{img_filename}" style="max-width:100%; height:auto;" />'
+
+        # Handle numbered lists
+        for block in doc.element.body:
+            if block.tag.endswith('numPr'):
+                html_content += '<ol>'
+                for item in block:
+                    html_content += f'<li>{item.text}</li>'
+                html_content += '</ol>'
 
         # Create HTML file
         html_content += '</body></html>'
