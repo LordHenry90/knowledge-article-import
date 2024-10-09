@@ -2,8 +2,7 @@ from flask import Flask, request, send_file, render_template, url_for
 from werkzeug.utils import secure_filename
 import os
 import zipfile
-from docx import Document
-from docx.oxml.ns import qn
+import mammoth
 import shutil
 from PIL import Image
 import csv
@@ -79,69 +78,15 @@ def download_zip():
 def process_docx(file_path, output_path):
     try:
         root_data_path = os.path.join(output_path, 'Data')
-        images_path = os.path.join(root_data_path, 'images')
         os.makedirs(root_data_path, exist_ok=True)
-        os.makedirs(images_path, exist_ok=True)
 
-        # Extract content from DOCX
-        doc = Document(file_path)
-        html_content = '<html><head><meta charset="utf-8"></head><body>'
-        img_counter = 0
-
-        for para in doc.paragraphs:
-            if para.text.strip():
-                if para.style.name.startswith('Heading'):
-                    html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
-                else:
-                    html_content += '<p>'
-                    for run in para.runs:
-                        run_style = ''
-                        if run.bold:
-                            run_style += 'font-weight:bold;'
-                        if run.italic:
-                            run_style += 'font-style:italic;'
-                        if run.font and run.font.name:
-                            run_style += f'font-family:{run.font.name};'
-
-                        if run_style:
-                            run_text = f'<span style="{run_style}">{run.text}</span>'
-                        else:
-                            run_text = run.text
-
-                        # Check if the run contains an email address
-                        if re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', run.text):
-                            run_text = f'<a href="mailto:{run.text}">{run.text}</a>'
-
-                        # Check if the run is part of a hyperlink
-                        hyperlink_elem = run._element.getparent()
-                        while hyperlink_elem is not None and not hyperlink_elem.tag.endswith('hyperlink'):
-                            hyperlink_elem = hyperlink_elem.getparent()
-
-                        if hyperlink_elem is not None and hyperlink_elem.tag.endswith('hyperlink'):
-                            r_id = hyperlink_elem.get(qn('r:id'))
-                            if r_id in doc.part.rels:
-                                hyperlink_target = doc.part.rels[r_id].target
-                                run_text = f'<a href="{hyperlink_target}">{run.text}</a>'
-
-                        html_content += run_text
-                    html_content += '</p>'
-
-            # Check for images in the runs of the paragraph
-            for run in para.runs:
-                if run.element.findall('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}):
-                    img_counter += 1
-                    blip = run.element.find('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})
-                    if blip is not None:
-                        r_id = blip.get(qn('r:embed'))
-                        image_part = doc.part.related_parts[r_id]
-                        img_filename = f'image_{img_counter}.png'
-                        img_path = os.path.join(images_path, img_filename)
-                        with open(img_path, 'wb') as img_file:
-                            img_file.write(image_part.blob)
-                        html_content += f'<img src="images/{img_filename}" style="max-width:100%; height:auto;" />'
+        # Extract content from DOCX using mammoth
+        with open(file_path, "rb") as docx_file:
+            result = mammoth.convert_to_html(docx_file)
+            html_content = result.value  # The generated HTML
 
         # Create HTML file
-        html_content += '</body></html>'
+        html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
         html_filename = secure_filename(os.path.splitext(os.path.basename(file_path))[0]) + '.html'
         html_path = os.path.join(root_data_path, html_filename)
         with open(html_path, 'w', encoding='utf-8') as html_file:
