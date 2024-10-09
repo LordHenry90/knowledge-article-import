@@ -105,8 +105,8 @@ def process_docx(file_path, output_path):
                             run_style += f'font-family:{run.font.name};'
 
                         # Check if the run is part of a hyperlink
-                        hyperlink = run.element.find('.//w:hyperlink', namespaces={'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'})
-                        if hyperlink is not None:
+                        if run._element.getparent().tag.endswith('hyperlink'):
+                            hyperlink = run._element.getparent()
                             r_id = hyperlink.get(qn('r:id'))
                             hyperlink_target = doc.part.related_parts[r_id].target if r_id else ''
                             html_content += f'<a href="{hyperlink_target}">'
@@ -116,7 +116,7 @@ def process_docx(file_path, output_path):
                         else:
                             html_content += f'{run.text}'
 
-                        if hyperlink is not None:
+                        if run._element.getparent().tag.endswith('hyperlink'):
                             html_content += '</a>'
                     html_content += '</p>'
 
