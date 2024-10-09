@@ -3,9 +3,6 @@ from werkzeug.utils import secure_filename
 import os
 import zipfile
 from docx import Document
-from docx.oxml.ns import qn
-from docx.oxml import parse_xml
-from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 import shutil
 from PIL import Image
 import csv
@@ -91,25 +88,26 @@ def process_docx(file_path, output_path):
         img_counter = 0
 
         for para in doc.paragraphs:
-            # Check for images in the paragraph
-            for run in para.runs:
-                if run.element.xpath('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}):
-                    img_counter += 1
-                    img_data = run.element.xpath('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})[0]
-                    r_id = img_data.get(qn('r:embed'))
-                    image_part = doc.part.related_parts[r_id]
-                    img_filename = f'image_{img_counter}.png'
-                    img_path = os.path.join(images_path, img_filename)
-                    with open(img_path, 'wb') as img_file:
-                        img_file.write(image_part.blob)
-                    html_content += f'<img src="images/{img_filename}" style="max-width:100%; height:auto;" />'
-            
             # Add text with formatting for headings and paragraphs
             if para.text.strip():
                 if para.style.name.startswith('Heading'):
                     html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
                 else:
                     html_content += f'<p>{para.text}</p>'
+
+            # Check for images in the paragraph
+            for run in para.runs:
+                if run.element.xpath('.//w:drawing'):
+                    img_counter += 1
+                    blip = run.element.xpath('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})
+                    if blip:
+                        r_id = blip[0].get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                        image_part = doc.part.related_parts[r_id]
+                        img_filename = f'image_{img_counter}.png'
+                        img_path = os.path.join(images_path, img_filename)
+                        with open(img_path, 'wb') as img_file:
+                            img_file.write(image_part.blob)
+                        html_content += f'<img src="images/{img_filename}" style="max-width:100%; height:auto;" />'
 
         # Create HTML file
         html_content += '</body></html>'
