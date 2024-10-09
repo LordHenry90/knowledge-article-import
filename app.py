@@ -5,6 +5,7 @@ import zipfile
 from docx import Document
 from docx.oxml.ns import qn
 from docx.oxml import parse_xml
+from docx.enum.text import WD_PARAGRAPH_ALIGNMENT
 import shutil
 from PIL import Image
 import csv
@@ -89,29 +90,26 @@ def process_docx(file_path, output_path):
         html_content = '<html><head><meta charset="utf-8"></head><body>'
         img_counter = 0
 
-        for block in doc.element.body:
-            if block.tag.endswith('p'):
-                para = Document(block)
-                if para.text.strip():
-                    if para.style.name.startswith('Heading'):
-                        html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
-                    else:
-                        html_content += f'<p>{para.text}</p>'
-            elif block.tag.endswith('tbl'):
-                # Table processing if needed
-                html_content += '<table>'
-                # Add your table processing logic here
-                html_content += '</table>'
-
-        for rel in doc.part.rels.values():
-            if 'image' in rel.target_ref:
-                img_counter += 1
-                img_data = rel.target_part.blob
-                img_filename = f'image_{img_counter}.png'
-                img_path = os.path.join(images_path, img_filename)
-                with open(img_path, 'wb') as img_file:
-                    img_file.write(img_data)
-                html_content += f'<img src="images/{img_filename}" style="max-width:100%; height:auto;" />'
+        for para in doc.paragraphs:
+            # Check for images in the paragraph
+            for run in para.runs:
+                if run.element.xpath('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}):
+                    img_counter += 1
+                    img_data = run.element.xpath('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})[0]
+                    r_id = img_data.get(qn('r:embed'))
+                    image_part = doc.part.related_parts[r_id]
+                    img_filename = f'image_{img_counter}.png'
+                    img_path = os.path.join(images_path, img_filename)
+                    with open(img_path, 'wb') as img_file:
+                        img_file.write(image_part.blob)
+                    html_content += f'<img src="images/{img_filename}" style="max-width:100%; height:auto;" />'
+            
+            # Add text with formatting for headings and paragraphs
+            if para.text.strip():
+                if para.style.name.startswith('Heading'):
+                    html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
+                else:
+                    html_content += f'<p>{para.text}</p>'
 
         # Create HTML file
         html_content += '</body></html>'
