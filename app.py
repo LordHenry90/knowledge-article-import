@@ -108,6 +108,10 @@ def process_docx(file_path, output_path):
                         else:
                             run_text = run.text
 
+                        # Check if the run contains an email address
+                        if re.match(r'^[\w\.-]+@[\w\.-]+\.\w+$', run.text):
+                            run_text = f'<a href="mailto:{run.text}">{run.text}</a>'
+
                         # Check if the run is part of a hyperlink
                         hyperlink_elem = run._element.getparent()
                         while hyperlink_elem is not None and not hyperlink_elem.tag.endswith('hyperlink'):
@@ -117,10 +121,7 @@ def process_docx(file_path, output_path):
                             r_id = hyperlink_elem.get(qn('r:id'))
                             if r_id in doc.part.rels:
                                 hyperlink_target = doc.part.rels[r_id].target
-                                if hyperlink_target.startswith('mailto:'):
-                                    run_text = f'<a href="{hyperlink_target}">{run.text}</a>'
-                                else:
-                                    run_text = f'<a href="{hyperlink_target}">{run.text}</a>'
+                                run_text = f'<a href="{hyperlink_target}">{run.text}</a>'
 
                         html_content += run_text
                     html_content += '</p>'
