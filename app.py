@@ -90,9 +90,16 @@ def process_docx(file_path, output_path):
         soup = BeautifulSoup(html_content, 'html.parser')
         ordered_lists = soup.find_all('ol')
         for ol in ordered_lists:
+            start_value = 1
+            if ol.has_attr('start'):
+                try:
+                    start_value = int(ol['start'])
+                except ValueError:
+                    pass
             list_items = ol.find_all('li')
-            for index, li in enumerate(list_items, start=1):
+            for index, li in enumerate(list_items, start=start_value):
                 li['value'] = str(index)
+            ol['start'] = str(start_value)
 
         # Convert the modified soup back to HTML
         html_content = str(soup)
@@ -126,4 +133,3 @@ def process_docx(file_path, output_path):
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-    
