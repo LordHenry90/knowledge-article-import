@@ -120,7 +120,7 @@ def process_docx(file_path, output_path):
             csv_writer = csv.writer(csv_file)
             csv_writer.writerow(['Title', 'Summary', 'URLName', 'channels', 'QUESTION__c', 'ANSWER__c', 'RichTextDescription__c'])
             title = os.path.splitext(os.path.basename(file_path))[0]
-            url_name = re.sub(r'\s+', '-', title)
+            url_name = re.sub(r'[\s_]+', '-', title)
             csv_writer.writerow([title, title, url_name, 'application', '', '', f'data/{html_filename}'])
     except Exception as e:
         logging.error(f"Error occurred while processing DOCX file: {e}")
