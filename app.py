@@ -104,20 +104,25 @@ def process_docx(file_path, output_path):
                 # Replace base64 image reference with actual image path in HTML
                 html_content = html_content.replace(f'data:image/png;base64,{img_counter}', f'images/{img_filename}')
 
-        # Post-process HTML to fix list numbering using BeautifulSoup
+        # Post-process HTML to fix list numbering using BeautifulSoup and python-docx
         soup = BeautifulSoup(html_content, 'html.parser')
-        ordered_lists = soup.find_all('ol')
-        for ol in ordered_lists:
-            start_value = 1
-            if ol.has_attr('start'):
-                try:
-                    start_value = int(ol['start'])
-                except ValueError:
-                    pass
-            list_items = ol.find_all('li')
-            for index, li in enumerate(list_items, start=start_value):
-                li['value'] = str(index)
-            ol['start'] = str(start_value)
+        for para in doc.paragraphs:
+            if para.style.name in ['List Paragraph', 'List Number']:  # Handle both bullet and numbered lists
+                list_items = [run.text for run in para.runs]
+                if para.style.name == 'List Number':
+                    new_ol = soup.new_tag('ol')
+                    for item in list_items:
+                        li = soup.new_tag('li')
+                        li.string = item
+                        new_ol.append(li)
+                    soup.body.append(new_ol)
+                else:
+                    new_ul = soup.new_tag('ul')
+                    for item in list_items:
+                        li = soup.new_tag('li')
+                        li.string = item
+                        new_ul.append(li)
+                    soup.body.append(new_ul)
 
         # Convert the modified soup back to HTML
         html_content = str(soup)
