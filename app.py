@@ -3,12 +3,12 @@ from werkzeug.utils import secure_filename
 import os
 import zipfile
 from docx import Document
+from docx.oxml.ns import qn
 import shutil
 from PIL import Image
 import csv
 import re
 import logging
-from docx.shared import Inches
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -88,31 +88,26 @@ def process_docx(file_path, output_path):
         html_content = '<html><head><meta charset="utf-8"></head><body>'
         img_counter = 0
 
-        for block in doc.element.body:
-            if block.tag.endswith('p'):
-                para = doc.paragraphs[img_counter] if img_counter < len(doc.paragraphs) else None
-                if para and para.text.strip():
-                    if para.style.name.startswith('Heading'):
-                        html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
-                    else:
-                        html_content += f'<p>{para.text}</p>'
-            elif block.tag.endswith('tbl'):
-                # Table processing if needed
-                html_content += '<table>'
-                # Add your table processing logic here
-                html_content += '</table>'
-            elif block.tag.endswith('drawing'):
-                # Handle images
-                img_counter += 1
-                image = block.find('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})
-                if image is not None:
-                    r_id = image.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
-                    image_part = doc.part.related_parts[r_id]
-                    img_filename = f'image_{img_counter}.png'
-                    img_path = os.path.join(images_path, img_filename)
-                    with open(img_path, 'wb') as img_file:
-                        img_file.write(image_part.blob)
-                    html_content += f'<img src="images/{img_filename}" style="max-width:100%; height:auto;" />'
+        for para in doc.paragraphs:
+            # Add text with formatting for headings and paragraphs
+            if para.text.strip():
+                if para.style.name.startswith('Heading'):
+                    html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
+                else:
+                    html_content += f'<p>{para.text}</p>'
+            # Check for images in the runs of the paragraph
+            for run in para.runs:
+                if run.element.findall('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'}):
+                    img_counter += 1
+                    blip = run.element.find('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})
+                    if blip is not None:
+                        r_id = blip.get(qn('r:embed'))
+                        image_part = doc.part.related_parts[r_id]
+                        img_filename = f'image_{img_counter}.png'
+                        img_path = os.path.join(images_path, img_filename)
+                        with open(img_path, 'wb') as img_file:
+                            img_file.write(image_part.blob)
+                        html_content += f'<img src="images/{img_filename}" style="max-width:100%; height:auto;" />'
 
         # Create HTML file
         html_content += '</body></html>'
