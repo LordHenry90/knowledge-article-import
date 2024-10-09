@@ -85,13 +85,23 @@ def process_docx(file_path, output_path):
 
         # Extract content from DOCX
         doc = Document(file_path)
-        html_content = ""
+        html_content = '<html><head><meta charset="utf-8"></head><body>'
         img_counter = 0
         for para in doc.paragraphs:
-            html_content += f'<p>{para.text}</p>'
+            if para.style.name.startswith('Heading'):
+                html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
+            else:
+                html_content += f'<p>{para.text}</p>'
 
         for rel in doc.part.rels.values():
             if 'image' in rel.target_ref:
+                img_counter += 1
+                img_data = rel.target_part.blob
+                img_filename = f'image_{img_counter}.png'
+                img_path = os.path.join(images_path, img_filename)
+                with open(img_path, 'wb') as img_file:
+                    img_file.write(img_data)
+                html_content += f'<img src="images/{img_filename}" style="max-width:100%; height:auto;" />'
                 img_counter += 1
                 img_data = rel.target_part.blob
                 img_filename = f'image_{img_counter}.png'
@@ -103,6 +113,7 @@ def process_docx(file_path, output_path):
         # Create HTML file
         html_filename = secure_filename(os.path.splitext(os.path.basename(file_path))[0]) + '.html'
         html_path = os.path.join(root_data_path, html_filename)
+        html_content += '</body></html>'
         with open(html_path, 'w', encoding='utf-8') as html_file:
             html_file.write(html_content)
 
@@ -120,7 +131,7 @@ def process_docx(file_path, output_path):
             csv_writer = csv.writer(csv_file)
             csv_writer.writerow(['Title', 'Summary', 'URLName', 'channels', 'QUESTION__c', 'ANSWER__c', 'RichTextDescription__c'])
             title = os.path.splitext(os.path.basename(file_path))[0]
-            url_name = re.sub(r'[\s_]+', '-', title)
+            url_name = re.sub(r'\s+', '-', title)
             csv_writer.writerow([title, title, url_name, 'application', '', '', f'data/{html_filename}'])
     except Exception as e:
         logging.error(f"Error occurred while processing DOCX file: {e}")
