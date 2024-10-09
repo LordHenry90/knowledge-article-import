@@ -103,10 +103,15 @@ def process_docx(file_path, output_path):
                             run_style += 'font-style:italic;'
                         if run.font and run.font.name:
                             run_style += f'font-family:{run.font.name};'
+                        if run.hyperlink:
+                            hyperlink = run.hyperlink.target
+                            html_content += f'<a href="{hyperlink}">'
                         if run_style:
                             html_content += f'<span style="{run_style}">{run.text}</span>'
                         else:
                             html_content += f'{run.text}'
+                        if run.hyperlink:
+                            html_content += '</a>'
                     html_content += '</p>'
 
             # Check for images in the runs of the paragraph
