@@ -3,7 +3,8 @@ from werkzeug.utils import secure_filename
 import os
 import zipfile
 from docx import Document
-from bs4 import BeautifulSoup
+from docx.oxml.ns import qn
+from docx.oxml import parse_xml
 import shutil
 from PIL import Image
 import csv
@@ -88,12 +89,19 @@ def process_docx(file_path, output_path):
         html_content = '<html><head><meta charset="utf-8"></head><body>'
         img_counter = 0
 
-        for para in doc.paragraphs:
-            # Add text with formatting for headings and paragraphs
-            if para.style.name.startswith('Heading'):
-                html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
-            else:
-                html_content += f'<p>{para.text}</p>'
+        for block in doc.element.body:
+            if block.tag.endswith('p'):
+                para = Document(block)
+                if para.text.strip():
+                    if para.style.name.startswith('Heading'):
+                        html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
+                    else:
+                        html_content += f'<p>{para.text}</p>'
+            elif block.tag.endswith('tbl'):
+                # Table processing if needed
+                html_content += '<table>'
+                # Add your table processing logic here
+                html_content += '</table>'
 
         for rel in doc.part.rels.values():
             if 'image' in rel.target_ref:
