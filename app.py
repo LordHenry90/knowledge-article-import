@@ -9,6 +9,7 @@ from PIL import Image
 import csv
 import re
 import logging
+from lxml import etree
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -109,9 +110,9 @@ def process_docx(file_path, output_path):
                             run_text = run.text
 
                         # Check if the run is part of a hyperlink
-                        if run._element.getparent().tag.endswith('hyperlink'):
-                            hyperlink = run._element.getparent()
-                            r_id = hyperlink.get(qn('r:id'))
+                        hyperlink_elem = run._element.getparent()
+                        if hyperlink_elem is not None and hyperlink_elem.tag.endswith('hyperlink'):
+                            r_id = hyperlink_elem.get(qn('r:id'))
                             if r_id in doc.part.rels:
                                 hyperlink_target = doc.part.rels[r_id].target
                                 run_text = f'<a href="{hyperlink_target}">{run_text}</a>'
