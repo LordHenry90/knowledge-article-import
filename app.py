@@ -103,21 +103,18 @@ def process_docx(file_path, output_path):
                         if run.font and run.font.name:
                             run_style += f'font-family:{run.font.name};'
 
-                        if run_style:
-                            run_text = f'<span style="{run_style}">{run.text}</span>'
-                        else:
-                            run_text = run.text
-
                         # Check if the run is part of a hyperlink
-                        hyperlink_elem = run._element.getparent()
-                        while hyperlink_elem is not None and not hyperlink_elem.tag.endswith('hyperlink'):
-                            hyperlink_elem = hyperlink_elem.getparent()
-
-                        if hyperlink_elem is not None and hyperlink_elem.tag.endswith('hyperlink'):
-                            r_id = hyperlink_elem.get(qn('r:id'))
+                        hyperlink = run._element.find('.//w:hyperlink', namespaces={'w': 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'})
+                        if hyperlink is not None:
+                            r_id = hyperlink.get(qn('r:id'))
                             if r_id in doc.part.rels:
                                 hyperlink_target = doc.part.rels[r_id].target
-                                run_text = f'<a href="{hyperlink_target}">{run_text}</a>'
+                                run_text = f'<a href="{hyperlink_target}">{run.text}</a>'
+                        else:
+                            if run_style:
+                                run_text = f'<span style="{run_style}">{run.text}</span>'
+                            else:
+                                run_text = run.text
 
                         html_content += run_text
                     html_content += '</p>'
