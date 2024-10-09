@@ -112,24 +112,37 @@ def process_docx(file_path, output_path):
         else:
             body_tag = soup.body
 
+        # Extract paragraphs and handle lists properly
+        ol_tag = None
+        ul_tag = None
         for para in doc.paragraphs:
-            if para.style.name in ['List Paragraph', 'List Number']:  # Handle both bullet and numbered lists
-                list_items = [run.text for run in para.runs if run.text.strip()]
-                if list_items:
-                    if para.style.name == 'List Number':
-                        new_ol = soup.new_tag('ol')
-                        for item in list_items:
-                            li = soup.new_tag('li')
-                            li.string = item
-                            new_ol.append(li)
-                        body_tag.append(new_ol)
-                    else:
-                        new_ul = soup.new_tag('ul')
-                        for item in list_items:
-                            li = soup.new_tag('li')
-                            li.string = item
-                            new_ul.append(li)
-                        body_tag.append(new_ul)
+            text = para.text.strip()
+            if not text:
+                continue
+
+            # Handle numbered list paragraphs
+            if para.style.name in ['List Number', 'List Number 2', 'List Number 3']:
+                if not ol_tag:
+                    ol_tag = soup.new_tag('ol')
+                    body_tag.append(ol_tag)
+                li_tag = soup.new_tag('li')
+                li_tag.string = text
+                ol_tag.append(li_tag)
+            elif para.style.name in ['List Bullet', 'List Bullet 2', 'List Bullet 3']:
+                # Handle bulleted list paragraphs
+                if not ul_tag:
+                    ul_tag = soup.new_tag('ul')
+                    body_tag.append(ul_tag)
+                li_tag = soup.new_tag('li')
+                li_tag.string = text
+                ul_tag.append(li_tag)
+            else:
+                # If we encounter a non-list paragraph, reset the list tags
+                ol_tag = None
+                ul_tag = None
+                p_tag = soup.new_tag('p')
+                p_tag.string = text
+                body_tag.append(p_tag)
 
         # Convert the modified soup back to HTML
         html_content = str(soup)
