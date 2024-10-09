@@ -9,6 +9,7 @@ import csv
 import re
 import logging
 from bs4 import BeautifulSoup
+from docx import Document
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -79,12 +80,29 @@ def download_zip():
 def process_docx(file_path, output_path):
     try:
         root_data_path = os.path.join(output_path, 'Data')
+        images_path = os.path.join(root_data_path, 'images')
         os.makedirs(root_data_path, exist_ok=True)
+        os.makedirs(images_path, exist_ok=True)
 
         # Extract content from DOCX using mammoth
         with open(file_path, "rb") as docx_file:
             result = mammoth.convert_to_html(docx_file)
             html_content = result.value  # The generated HTML
+
+        # Extract images from DOCX
+        doc = Document(file_path)
+        img_counter = 0
+        for rel in doc.part.rels.values():
+            if "image" in rel.target_ref:
+                img_counter += 1
+                img_data = rel.target_part.blob
+                img_filename = f'image_{img_counter}.png'
+                img_path = os.path.join(images_path, img_filename)
+                with open(img_path, 'wb') as img_file:
+                    img_file.write(img_data)
+
+                # Replace base64 image reference with actual image path in HTML
+                html_content = html_content.replace(f'data:image/png;base64,{img_counter}', f'images/{img_filename}')
 
         # Post-process HTML to fix list numbering using BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
