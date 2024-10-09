@@ -89,7 +89,6 @@ def process_docx(file_path, output_path):
         img_counter = 0
 
         for para in doc.paragraphs:
-            # Add text with formatting for headings and paragraphs
             if para.text.strip():
                 if para.style.name.startswith('Heading'):
                     html_content += f'<h{para.style.name[-1]}>{para.text}</h{para.style.name[-1]}>'
@@ -104,20 +103,20 @@ def process_docx(file_path, output_path):
                         if run.font and run.font.name:
                             run_style += f'font-family:{run.font.name};'
 
+                        if run_style:
+                            run_text = f'<span style="{run_style}">{run.text}</span>'
+                        else:
+                            run_text = run.text
+
                         # Check if the run is part of a hyperlink
                         if run._element.getparent().tag.endswith('hyperlink'):
                             hyperlink = run._element.getparent()
                             r_id = hyperlink.get(qn('r:id'))
-                            hyperlink_target = doc.part.related_parts[r_id].target if r_id else ''
-                            html_content += f'<a href="{hyperlink_target}">'
+                            if r_id in doc.part.rels:
+                                hyperlink_target = doc.part.rels[r_id].target
+                                run_text = f'<a href="{hyperlink_target}">{run_text}</a>'
 
-                        if run_style:
-                            html_content += f'<span style="{run_style}">{run.text}</span>'
-                        else:
-                            html_content += f'{run.text}'
-
-                        if run._element.getparent().tag.endswith('hyperlink'):
-                            html_content += '</a>'
+                        html_content += run_text
                     html_content += '</p>'
 
             # Check for images in the runs of the paragraph
