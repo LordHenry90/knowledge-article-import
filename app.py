@@ -86,7 +86,7 @@ def process_docx(file_path, output_path):
 
         # Extract content from DOCX using mammoth
         with open(file_path, "rb") as docx_file:
-            result = mammoth.convert_to_html(docx_file)
+            result = mammoth.convert_to_html(docx_file, convert_image=mammoth.images.img_element(convert_image_to_path(images_path)))
             html_content = result.value  # The generated HTML
 
         # Extract images from DOCX
@@ -101,8 +101,8 @@ def process_docx(file_path, output_path):
                 with open(img_path, 'wb') as img_file:
                     img_file.write(img_data)
 
-                # Replace the placeholder for the image with the correct path
-                html_content = html_content.replace(f'src="data:image/png;base64,{img_counter}"', f'src="images/{img_filename}"')
+                # Replace the base64 image reference with actual image path in HTML
+                html_content = re.sub(r'data:image/[^;]+;base64,[^"]+', f'images/{img_filename}', html_content)
 
         # Post-process HTML to fix list numbering using BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
@@ -141,6 +141,16 @@ def process_docx(file_path, output_path):
     except Exception as e:
         logging.error(f"Error occurred while processing DOCX file: {e}")
         raise
+
+def convert_image_to_path(images_path):
+    def converter(image):
+        img_counter = len(os.listdir(images_path)) + 1
+        img_filename = f'image_{img_counter}.png'
+        img_path = os.path.join(images_path, img_filename)
+        with open(img_path, 'wb') as img_file:
+            img_file.write(image.read())
+        return {"src": f'images/{img_filename}'}
+    return converter
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
