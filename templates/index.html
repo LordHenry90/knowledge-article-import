@@ -13,7 +13,7 @@
             <form action="/upload" method="POST" enctype="multipart/form-data" class="slds-form-element">
                 <div class="slds-form-element__control slds-m-bottom_medium">
                     <label class="slds-form-element__label" for="file">Select DOCX File:</label>
-                    <input type="file" name="file" id="file" class="slds-input" required>
+                    <input type="file" name="files[]" id="file" class="slds-input" required multiple>
                 </div>
                 <button type="submit" class="slds-button slds-button_brand slds-button_stretch">Upload and Convert</button>
             </form>
