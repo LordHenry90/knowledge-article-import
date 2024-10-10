@@ -56,7 +56,7 @@ def upload():
             zipf.write(os.path.join(output_path, 'content.properties'), 'content.properties')
             zipf.write(os.path.join(output_path, 'KnowledgeArticlesImport.csv'), 'KnowledgeArticlesImport.csv')
             # Add files from Data folder
-            data_path = os.path.join(output_path, 'Data')
+            data_path = os.path.join(output_path, 'data')
             for root, _, files in os.walk(data_path):
                 for file in files:
                     zipf.write(os.path.join(root, file), os.path.relpath(os.path.join(root, file), output_path))
@@ -79,7 +79,7 @@ def download_zip():
 # Process DOCX file
 def process_docx(file_path, output_path):
     try:
-        root_data_path = os.path.join(output_path, 'Data')
+        root_data_path = os.path.join(output_path, 'data')
         images_path = os.path.join(root_data_path, 'images')
         os.makedirs(root_data_path, exist_ok=True)
         os.makedirs(images_path, exist_ok=True)
