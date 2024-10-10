@@ -139,8 +139,8 @@ def process_docx(file_path, output_path):
             csv_writer = csv.writer(csv_file)
             if not csv_exists:
                 csv_writer.writerow(['Title', 'Summary', 'URLName', 'channels', 'Content__c'])
-            title = os.path.basename(file_path)
-            url_name = re.sub(r'[\s_]+', '-', os.path.splitext(title)[0])
+            title = os.path.splitext(os.path.basename(file_path))[0].replace('_', ' ')
+            url_name = re.sub(r'[\s_]+', '-', os.path.splitext(os.path.basename(file_path))[0])
             csv_writer.writerow([title, title, url_name, 'application', f'data/{html_filename}'])
     except Exception as e:
         logging.error(f"Error occurred while processing DOCX file: {e}")
