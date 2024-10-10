@@ -34,20 +34,22 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
-        if 'file' not in request.files:
+        if 'files[]' not in request.files:
             return 'No file part', 400
-        file = request.files['file']
-        if file.filename == '':
+        files = request.files.getlist('files[]')
+        if not files:
             return 'No selected file', 400
 
-        filename = secure_filename(file.filename)
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-        file.save(file_path)
-
-        # Process .docx file
         output_path = os.path.join(app.config['OUTPUT_FOLDER'], 'Root')
         os.makedirs(output_path, exist_ok=True)
-        process_docx(file_path, output_path)
+
+        for file in files:
+            if file.filename == '':
+                continue
+            filename = secure_filename(file.filename)
+            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            file.save(file_path)
+            process_docx(file_path, output_path)
 
         # Zip output
         zip_path = os.path.join(OUTPUT_FOLDER, 'KnowledgeArticlesImport.zip')
@@ -55,7 +57,7 @@ def upload():
             # Add content.properties and CSV file
             zipf.write(os.path.join(output_path, 'content.properties'), 'content.properties')
             zipf.write(os.path.join(output_path, 'KnowledgeArticlesImport.csv'), 'KnowledgeArticlesImport.csv')
-            # Add files from Data folder
+            # Add files from data folder
             data_path = os.path.join(output_path, 'data')
             for root, _, files in os.walk(data_path):
                 for file in files:
@@ -132,11 +134,13 @@ def process_docx(file_path, output_path):
 
         # Create CSV file
         csv_path = os.path.join(output_path, 'KnowledgeArticlesImport.csv')
-        with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
+        csv_exists = os.path.exists(csv_path)
+        with open(csv_path, 'a', newline='', encoding='utf-8') as csv_file:
             csv_writer = csv.writer(csv_file)
-            csv_writer.writerow(['Title', 'Summary', 'URLName', 'channels', 'Content__c'])
-            title = os.path.splitext(os.path.basename(file_path))[0]
-            url_name = re.sub(r'[\s_]+', '-', title)
+            if not csv_exists:
+                csv_writer.writerow(['Title', 'Summary', 'URLName', 'channels', 'Content__c'])
+            title = os.path.basename(file_path)
+            url_name = re.sub(r'[\s_]+', '-', os.path.splitext(title)[0])
             csv_writer.writerow([title, title, url_name, 'application', f'data/{html_filename}'])
     except Exception as e:
         logging.error(f"Error occurred while processing DOCX file: {e}")
