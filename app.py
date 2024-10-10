@@ -134,10 +134,10 @@ def process_docx(file_path, output_path):
         csv_path = os.path.join(output_path, 'KnowledgeArticlesImport.csv')
         with open(csv_path, 'w', newline='', encoding='utf-8') as csv_file:
             csv_writer = csv.writer(csv_file)
-            csv_writer.writerow(['Title', 'Summary', 'URLName', 'channels', 'QUESTION__c', 'ANSWER__c', 'RichTextDescription__c'])
+            csv_writer.writerow(['Title', 'Summary', 'URLName', 'channels', 'Content__c'])
             title = os.path.splitext(os.path.basename(file_path))[0]
             url_name = re.sub(r'[\s_]+', '-', title)
-            csv_writer.writerow([title, title, url_name, 'application', '', '', f'data/{html_filename}'])
+            csv_writer.writerow([title, title, url_name, 'application', f'data/{html_filename}'])
     except Exception as e:
         logging.error(f"Error occurred while processing DOCX file: {e}")
         raise
