@@ -66,18 +66,16 @@ def convert_docx_to_html(docx_file_path):
         os.makedirs(images_dir, exist_ok=True)
         
         def handle_image(image):
-            with image.open() as image_bytes:
-                image_data = image_bytes.read()
             extension = image.content_type.split("/")[1]
             image_filename = f"{uuid.uuid4()}.{extension}"
             image_path = os.path.join('images', image_filename)
-            with open(os.path.join(app.config['DATA_FOLDER'], image_path), "wb") as f:
-                f.write(image_data)
+            with image.open() as image_bytes, open(os.path.join(app.config['DATA_FOLDER'], image_path), "wb") as f:
+                f.write(image_bytes.read())
             return {"src": image_path}
         
         # Options for mammoth 1.8.0
-        options = {
-            "style_map": [
+        options = mammoth.convert_to_html.options(
+            style_map=[
                 "p[style-name='Heading 1'] => h1:fresh",
                 "p[style-name='Heading 2'] => h2:fresh",
                 "p[style-name='Heading 3'] => h3:fresh",
@@ -87,12 +85,12 @@ def convert_docx_to_html(docx_file_path):
                 "r[style-name='Strong'] => strong",
                 "r[style-name='Emphasis'] => em"
             ],
-            "ignore_empty_paragraphs": False,
-            "convert_image": mammoth.images.img_element(handle_image)
-        }
+            ignore_empty_paragraphs=False,
+            convert_image=mammoth.images.img_element(handle_image)
+        )
         
         with open(docx_file_path, "rb") as docx_file:
-            result = mammoth.convert_to_html(docx_file, **options)
+            result = mammoth.convert_to_html(docx_file, options=options)
         
         html = result.value
         messages = result.messages
