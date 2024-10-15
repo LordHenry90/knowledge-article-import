@@ -2,13 +2,11 @@ from flask import Flask, request, send_file, render_template, url_for, redirect
 from werkzeug.utils import secure_filename
 import os
 import zipfile
-import mammoth
 import shutil
-from PIL import Image
+import mammoth
 import csv
 import re
 import logging
-from bs4 import BeautifulSoup
 from docx import Document
 
 # Initialize Flask app
@@ -104,7 +102,7 @@ def process_docx(file_path, output_path):
         os.makedirs(root_data_path, exist_ok=True)
         os.makedirs(images_path, exist_ok=True)
 
-        # Extract content from DOCX using mammoth without converting images to base64
+        # Extract content from DOCX using mammoth
         with open(file_path, "rb") as docx_file:
             result = mammoth.convert_to_html(docx_file)
             html_content = result.value  # The generated HTML
@@ -112,7 +110,7 @@ def process_docx(file_path, output_path):
         # Extract images from DOCX
         doc = Document(file_path)
         img_counter = 0
-        image_replacements = []
+        img_mapping = {}  # Mapping between placeholder and image path
         for rel in doc.part.rels.values():
             if "image" in rel.target_ref:
                 img_counter += 1
@@ -121,18 +119,13 @@ def process_docx(file_path, output_path):
                 img_path = os.path.join(images_path, img_filename)
                 with open(img_path, 'wb') as img_file:
                     img_file.write(img_data)
-                image_replacements.append((f'relationships/{rel.rId}', f'images/{img_filename}'))
+                placeholder = f'IMAGE_PLACEHOLDER_{img_counter}'
+                img_mapping[placeholder] = img_path
+                html_content = re.sub(r'data:image/[^;]+;base64,[^"]+', placeholder, html_content, count=1)
 
-        # Replace each image placeholder correctly in the HTML content
-        soup = BeautifulSoup(html_content, 'html.parser')
-        for img_tag in soup.find_all('img'):
-            if 'src' in img_tag.attrs:
-                for img_id, img_path in image_replacements:
-                    if img_id in img_tag['src']:
-                        img_tag['src'] = img_path
-
-        # Convert the modified soup back to HTML
-        html_content = str(soup)
+        # Replace placeholders with correct image paths
+        for placeholder, img_path in img_mapping.items():
+            html_content = html_content.replace(placeholder, f'images/{os.path.basename(img_path)}')
 
         # Create HTML file
         html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
