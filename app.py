@@ -8,7 +8,10 @@ import csv
 import re
 import logging
 from bs4 import BeautifulSoup
-from docx import Document, InlineShape
+from docx import Document
+from docx.oxml.ns import qn
+from docx.oxml import OxmlElement
+from docx.text.paragraph import Paragraph
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -109,15 +112,17 @@ def process_docx(file_path, output_path):
         img_counter = 0
 
         for block in iter_block_items(doc):
-            if isinstance(block, InlineShape) and block.type == 3:  # Inline image
+            if block.tag == qn('w:drawing'):
                 img_counter += 1
-                img_data = block._inline.graphic.graphicData.pic.blipFill.blip.blob
+                blip = block.xpath('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})[0]
+                img_part = doc.part.related_parts[blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')]
+                img_data = img_part.blob
                 img_filename = f'image_{img_counter}.png'
                 img_path = os.path.join(images_path, img_filename)
                 with open(img_path, 'wb') as img_file:
                     img_file.write(img_data)
                 html_content += f'<p><img src="images/{img_filename}" alt="Image {img_counter}" /></p>'
-            elif hasattr(block, 'text'):
+            elif isinstance(block, Paragraph):
                 html_content += f"<p>{block.text}</p>"
 
         # Create HTML file
@@ -151,11 +156,6 @@ def process_docx(file_path, output_path):
 
 # Helper function to iterate over paragraphs and images
 def iter_block_items(parent):
-    from docx.oxml.ns import qn
-    from docx.oxml import OxmlElement
-    from docx.text.paragraph import Paragraph
-    from docx.shape import InlineShape
-
     if isinstance(parent, Document):
         parent_elm = parent.element.body
     else:
@@ -170,7 +170,7 @@ def iter_block_items(parent):
                     for sub_element in iter_block_items(cell):
                         yield sub_element
         elif child.tag == qn('w:drawing'):
-            yield InlineShape(OxmlElement(child), parent)
+            yield child
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
