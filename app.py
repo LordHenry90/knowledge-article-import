@@ -2,6 +2,7 @@ import os
 import sys
 import base64
 import hashlib
+import traceback
 from flask import Flask, render_template, request, send_file, redirect, url_for
 from werkzeug.utils import secure_filename
 import mammoth
@@ -9,12 +10,10 @@ import csv
 import zipfile
 import shutil
 from bs4 import BeautifulSoup
-import traceback
-
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
-app.config['DATA_FOLDER'] = 'data'
+app.config['UPLOAD_FOLDER'] = os.path.abspath('uploads')
+app.config['DATA_FOLDER'] = os.path.abspath('data')
 app.config['IMAGES_FOLDER'] = os.path.join(app.config['DATA_FOLDER'], 'images')
 app.config['OUTPUT_ZIP'] = 'KnowledgeArticlesImport.zip'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB limit
@@ -56,6 +55,10 @@ def convert_docx_to_html(docx_file):
     try:
         debug_print(f"Starting conversion of {docx_file}")
         file_path = os.path.join(app.config['UPLOAD_FOLDER'], docx_file)
+        
+        if not os.path.exists(file_path):
+            debug_print(f"Error: DOCX file not found: {file_path}")
+            return None, [f"Error: DOCX file not found: {file_path}"]
         
         if not verify_docx(file_path):
             return None, [f"Error: {docx_file} is not a valid DOCX file"]
@@ -190,6 +193,7 @@ def upload_file():
             
             for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER'], app.config['IMAGES_FOLDER']]:
                 os.makedirs(folder, exist_ok=True)
+                debug_print(f"Folder created/verified: {folder}")
             
             filenames = []
             messages = []
@@ -200,12 +204,23 @@ def upload_file():
                     file.save(file_path)
                     filenames.append(filename)
                     debug_print(f"File saved: {file_path}")
+                    
+                    # Verify file exists after saving
+                    if os.path.exists(file_path):
+                        debug_print(f"File verified: {file_path}")
+                    else:
+                        debug_print(f"Error: File not found after saving: {file_path}")
             
             create_content_properties()
             debug_print("Content properties created")
             
             html_files = []
             for filename in filenames:
+                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                if not os.path.exists(file_path):
+                    debug_print(f"Error: File not found before conversion: {file_path}")
+                    continue
+                
                 html_file, msg = convert_docx_to_html(filename)
                 if html_file:
                     html_files.append(html_file)
@@ -229,6 +244,7 @@ def upload_file():
             return send_file(app.config['OUTPUT_ZIP'], as_attachment=True)
         except Exception as e:
             debug_print(f"An error occurred: {str(e)}")
+            debug_print(f"Exception details: {traceback.format_exc()}")
             return f"An error occurred: {str(e)}", 500
     
     return render_template('upload.html')
