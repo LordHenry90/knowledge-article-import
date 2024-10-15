@@ -111,8 +111,7 @@ def process_docx(file_path, output_path):
         for para in doc.paragraphs:
             html_content += f"<p>{para.text}</p>"
 
-        # Extract images from DOCX
-        image_replacements = []
+        # Extract images from DOCX and replace them in the content
         for rel in doc.part.rels.values():
             if "image" in rel.target_ref:
                 img_counter += 1
@@ -121,18 +120,9 @@ def process_docx(file_path, output_path):
                 img_path = os.path.join(images_path, img_filename)
                 with open(img_path, 'wb') as img_file:
                     img_file.write(img_data)
-                image_replacements.append((f'relationships/{rel.rId}', f'images/{img_filename}'))
 
-        # Replace each image placeholder correctly in the HTML content
-        soup = BeautifulSoup(html_content, 'html.parser')
-        for img_tag in soup.find_all('img'):
-            if 'src' in img_tag.attrs:
-                for img_id, img_path in image_replacements:
-                    if img_id in img_tag['src']:
-                        img_tag['src'] = img_path
-
-        # Convert the modified soup back to HTML
-        html_content = str(soup)
+                # Create an <img> tag and add it to the HTML content
+                html_content += f'<p><img src="images/{img_filename}" alt="Image {img_counter}" /></p>'
 
         # Create HTML file
         html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
