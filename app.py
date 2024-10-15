@@ -3,15 +3,11 @@ from werkzeug.utils import secure_filename
 import os
 import zipfile
 import shutil
-from PIL import Image
+import mammoth
 import csv
 import re
 import logging
-from bs4 import BeautifulSoup
 from docx import Document
-from docx.oxml.ns import qn
-from docx.oxml import OxmlElement
-from docx.text.paragraph import Paragraph
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -106,24 +102,30 @@ def process_docx(file_path, output_path):
         os.makedirs(root_data_path, exist_ok=True)
         os.makedirs(images_path, exist_ok=True)
 
-        # Extract content from DOCX using python-docx without converting images to base64
-        doc = Document(file_path)
-        html_content = ""
-        img_counter = 0
+        # Extract content from DOCX using mammoth
+        with open(file_path, "rb") as docx_file:
+            result = mammoth.convert_to_html(docx_file)
+            html_content = result.value  # The generated HTML
 
-        for block in iter_block_items(doc):
-            if block.tag == qn('w:drawing'):
+        # Extract images from DOCX
+        doc = Document(file_path)
+        img_counter = 0
+        img_mapping = {}  # Mapping between placeholder and image path
+        for rel in doc.part.rels.values():
+            if "image" in rel.target_ref:
                 img_counter += 1
-                blip = block.xpath('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})[0]
-                img_part = doc.part.related_parts[blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')]
-                img_data = img_part.blob
+                img_data = rel.target_part.blob
                 img_filename = f'image_{img_counter}.png'
                 img_path = os.path.join(images_path, img_filename)
                 with open(img_path, 'wb') as img_file:
                     img_file.write(img_data)
-                html_content += f'<p><img src="images/{img_filename}" alt="Image {img_counter}" /></p>'
-            elif isinstance(block, Paragraph):
-                html_content += f"<p>{block.text}</p>"
+                placeholder = f'IMAGE_PLACEHOLDER_{img_counter}'
+                img_mapping[placeholder] = img_path
+                html_content = re.sub(r'data:image/[^;]+;base64,[^"]+', placeholder, html_content, count=1)
+
+        # Replace placeholders with correct image paths
+        for placeholder, img_path in img_mapping.items():
+            html_content = html_content.replace(placeholder, f'images/{os.path.basename(img_path)}')
 
         # Create HTML file
         html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
@@ -153,24 +155,6 @@ def process_docx(file_path, output_path):
     except Exception as e:
         logging.error(f"Error occurred while processing DOCX file: {e}")
         raise
-
-# Helper function to iterate over paragraphs and images
-def iter_block_items(parent):
-    if isinstance(parent, Document):
-        parent_elm = parent.element.body
-    else:
-        raise ValueError("Unsupported parent for iter_block_items")
-
-    for child in parent_elm.iterchildren():
-        if child.tag == qn('w:p'):
-            yield Paragraph(child, parent)
-        elif child.tag == qn('w:tbl'):
-            for row in child:
-                for cell in row:
-                    for sub_element in iter_block_items(cell):
-                        yield sub_element
-        elif child.tag == qn('w:drawing'):
-            yield child
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
