@@ -99,18 +99,25 @@ def create_csv(content_files):
 def create_zip_file():
     zip_path = os.path.join(app.config['DATA_FOLDER'], 'KnowledgeArticlesImport.zip')
     with zipfile.ZipFile(zip_path, 'w') as zipf:
-        # Add content.properties and KnowledgeArticlesImport.csv to the ZIP
+        # Add content.properties and KnowledgeArticlesImport.csv to the ZIP root
         content_properties_path = os.path.join(app.config['DATA_FOLDER'], 'content.properties')
         csv_path = os.path.join(app.config['DATA_FOLDER'], 'KnowledgeArticlesImport.csv')
         zipf.write(content_properties_path, 'content.properties')
         zipf.write(csv_path, 'KnowledgeArticlesImport.csv')
         
-        # Add HTML files and images under the data/ folder
-        for folder_name, subfolders, filenames in os.walk(app.config['DATA_FOLDER']):
-            for filename in filenames:
-                if filename not in ['KnowledgeArticlesImport.zip', 'content.properties', 'KnowledgeArticlesImport.csv']:
-                    file_path = os.path.join(folder_name, filename)
-                    zipf.write(file_path, os.path.relpath(file_path, app.config['DATA_FOLDER']))
+        # Add HTML files to the data/ folder in the ZIP
+        html_folder = os.path.join(app.config['DATA_FOLDER'])
+        for filename in os.listdir(html_folder):
+            if filename.endswith('.html'):
+                file_path = os.path.join(html_folder, filename)
+                zipf.write(file_path, os.path.join('data', filename))
+        
+        # Add images to the data/images/ folder in the ZIP
+        images_folder = app.config['IMAGES_FOLDER']
+        for filename in os.listdir(images_folder):
+            if filename.endswith('.png'):
+                file_path = os.path.join(images_folder, filename)
+                zipf.write(file_path, os.path.join('data', 'images', filename))
 
 @app.route('/download', methods=['GET'])
 def download_zip():
