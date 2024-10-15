@@ -85,15 +85,18 @@ def convert_docx_to_html(docx_file_path):
         # Extract document structure using python-docx
         doc = Document(docx_file_path)
         structure = []
+        title = None
         for para in doc.paragraphs:
             if para.text.strip():
-                structure.append({
+                item = {
                     'type': 'paragraph',
                     'style': para.style.name,
-                    'text': para.text
-                })
-        for table in doc.tables:
-            structure.append({'type': 'table'})
+                    'text': para.text.strip()
+                }
+                if not title and (para.style.name.startswith('Heading') or para.style.name == 'Title'):
+                    title = item
+                else:
+                    structure.append(item)
         
         # Custom style map
         style_map = """
@@ -103,6 +106,7 @@ def convert_docx_to_html(docx_file_path):
         p[style-name='Heading 4'] => h4:fresh
         p[style-name='Heading 5'] => h5:fresh
         p[style-name='Heading 6'] => h6:fresh
+        p[style-name='Title'] => h1:fresh
         r[style-name='Strong'] => strong
         r[style-name='Emphasis'] => em
         """
@@ -131,36 +135,50 @@ def convert_docx_to_html(docx_file_path):
         
         # Restructure content based on extracted structure
         new_body = soup.new_tag('body')
+        
+        # Add title if found
+        if title:
+            title_tag = soup.new_tag('h1')
+            title_tag.string = title['text']
+            new_body.append(title_tag)
+        
+        current_list = None
+        list_item_count = 0
+        
         for item in structure:
             if item['type'] == 'paragraph':
-                para = soup.find('p', string=item['text'])
-                if para:
-                    new_body.append(para.extract())
-            elif item['type'] == 'table':
-                table = soup.find('table')
-                if table:
-                    new_body.append(table.extract())
+                text = item['text']
+                if text.startswith(('1.', '2.', '3.', '4.', '5.')):
+                    if current_list is None:
+                        current_list = soup.new_tag('ol')
+                        new_body.append(current_list)
+                        list_item_count = 0
+                    list_item_count += 1
+                    li = soup.new_tag('li')
+                    content = text.split('.', 1)[1].strip()
+                    li.string = content
+                    current_list.append(li)
+                    
+                    # Find and move the corresponding image
+                    next_img = soup.find('img')
+                    if next_img:
+                        li.append(next_img.extract())
+                else:
+                    if current_list and list_item_count > 0:
+                        current_list = None
+                    para = soup.find('p', string=text)
+                    if para:
+                        new_body.append(para.extract())
+                    else:
+                        new_para = soup.new_tag('p')
+                        new_para.string = text
+                        new_body.append(new_para)
         
+        # Replace the existing body with the new structured body
         if soup.body:
             soup.body.replace_with(new_body)
         else:
             soup.append(new_body)
-        
-        # Fix numbering and add list structure
-        current_list = None
-        for p in soup.find_all('p'):
-            text = p.text.strip()
-            if text and text[0].isdigit() and '.' in text:
-                number, content = text.split('.', 1)
-                if current_list is None:
-                    current_list = soup.new_tag('ol')
-                    p.insert_before(current_list)
-                li = soup.new_tag('li')
-                li.string = content.strip()
-                current_list.append(li)
-                p.decompose()
-            else:
-                current_list = None
         
         # Add default styling
         style = soup.new_tag('style')
@@ -168,12 +186,13 @@ def convert_docx_to_html(docx_file_path):
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             h1, h2, h3, h4, h5, h6 { margin-top: 1em; margin-bottom: 0.5em; }
             p { margin-bottom: 1em; }
-            img { max-width: 100%; height: auto; }
+            img { max-width: 100%; height: auto; margin-top: 10px; margin-bottom: 10px; }
             ol { padding-left: 20px; }
             li { margin-bottom: 0.5em; }
             table { border-collapse: collapse; width: 100%; }
             th, td { border: 1px solid #ddd; padding: 8px; }
             th { background-color: #f2f2f2; }
+            strong { font-weight: bold; }
         """
         
         # Ensure proper HTML structure
