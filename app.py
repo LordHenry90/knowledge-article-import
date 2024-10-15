@@ -8,6 +8,8 @@ import csv
 import re
 import logging
 from docx import Document
+from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -110,25 +112,31 @@ def process_docx(file_path, output_path):
         # Extract images from DOCX
         doc = Document(file_path)
         img_counter = 0
-        img_mapping = {}  # Mapping between placeholder and image path
-        for rel in doc.part.rels.values():
-            if "image" in rel.target_ref:
+        html_parts = []  # To maintain sequential content and images
+        for block in doc.element.body.iterchildren():
+            if block.tag == qn('w:p'):
+                # Handle paragraphs
+                paragraph = Paragraph(block, doc)
+                html_parts.append(f'<p>{paragraph.text}</p>')
+            elif block.tag == qn('w:drawing'):
+                # Handle images
                 img_counter += 1
-                img_data = rel.target_part.blob
-                img_filename = f'image_{img_counter}.png'
-                img_path = os.path.join(images_path, img_filename)
-                with open(img_path, 'wb') as img_file:
-                    img_file.write(img_data)
-                placeholder = f'IMAGE_PLACEHOLDER_{img_counter}'
-                img_mapping[placeholder] = img_path
-                html_content = re.sub(r'data:image/[^;]+;base64,[^\"]+', placeholder, html_content, count=1)
+                blip = block.xpath('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})[0]
+                embed_rel = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                if embed_rel:
+                    img_part = doc.part.related_parts[embed_rel]
+                    img_data = img_part.blob
+                    img_filename = f'image_{img_counter}.png'
+                    img_path = os.path.join(images_path, img_filename)
+                    with open(img_path, 'wb') as img_file:
+                        img_file.write(img_data)
+                    html_parts.append(f'<img src="images/{img_filename}" alt="Image {img_counter}" />')
 
-        # Replace placeholders with correct image paths and ensure proper sequence
-        for placeholder, img_path in img_mapping.items():
-            html_content = html_content.replace(placeholder, f'<img src="images/{os.path.basename(img_path)}" alt="Image" />')
+        # Combine all parts to form the final HTML
+        html_content = ''.join(html_parts)
+        html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
 
         # Create HTML file
-        html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
         html_filename = secure_filename(os.path.splitext(os.path.basename(file_path))[0]) + '.html'
         html_path = os.path.join(root_data_path, html_filename)
         with open(html_path, 'w', encoding='utf-8') as html_file:
