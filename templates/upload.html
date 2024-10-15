@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Salesforce Knowledge Articles Import</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/design-system/2.17.5/styles/salesforce-lightning-design-system.min.css">
+</head>
+<body>
+    <div class="slds-container slds-container_center slds-p-around_medium">
+        <h1 class="slds-text-heading_large slds-m-bottom_medium">Salesforce Knowledge Articles Import</h1>
+        <form action="/" method="post" enctype="multipart/form-data" class="slds-form-element">
+            <div class="slds-form-element__control">
+                <div class="slds-file-selector slds-file-selector_files">
+                    <div class="slds-file-selector__dropzone">
+                        <input type="file" name="file" multiple accept=".docx" class="slds-file-selector__input slds-assistive-text" id="file-upload-input-01" aria-labelledby="file-selector-primary-label file-selector-secondary-label">
+                        <label class="slds-file-selector__body" for="file-upload-input-01" id="file-selector-label">
+                            <span class="slds-file-selector__button slds-button slds-button_neutral">
+                                <svg class="slds-button__icon slds-button__icon_left" aria-hidden="true">
+                                    <use xlink:href="/assets/icons/utility-sprite/svg/symbols.svg#upload"></use>
+                                </svg>Upload Multiple .docx Files</span>
+                            <span class="slds-file-selector__text slds-medium-show" id="file-selector-secondary-label">or Drop Files</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <button type="submit" class="slds-button slds-button_brand slds-m-top_medium">Process Files</button>
+        </form>
+        <form action="/clear" method="post" class="slds-m-top_medium">
+            <button type="submit" class="slds-button slds-button_destructive">Clear All Files</button>
+        </form>
+    </div>
+</body>
+</html>
