@@ -14,6 +14,10 @@ app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['DATA_FOLDER'] = 'data'
 app.config['IMAGES_FOLDER'] = os.path.join(app.config['DATA_FOLDER'], 'images')
 app.config['OUTPUT_ZIP'] = 'KnowledgeArticlesImport.zip'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB limit
+
+def debug_print(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
 
 def create_content_properties():
     content = """CSVEncoding=UTF8
