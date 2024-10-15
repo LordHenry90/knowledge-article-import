@@ -11,6 +11,9 @@ import zipfile
 import shutil
 from bs4 import BeautifulSoup
 import uuid
+from docx import Document
+from docx.shared import Pt
+from docx.enum.style import WD_STYLE_TYPE
 
 
 app = Flask(__name__)
@@ -79,6 +82,19 @@ def convert_docx_to_html(docx_file_path):
                 debug_print(f"Error handling image: {str(e)}")
                 return {"src": ""}
         
+        # Extract document structure using python-docx
+        doc = Document(docx_file_path)
+        structure = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                structure.append({
+                    'type': 'paragraph',
+                    'style': para.style.name,
+                    'text': para.text
+                })
+        for table in doc.tables:
+            structure.append({'type': 'table'})
+        
         # Custom style map
         style_map = """
         p[style-name='Heading 1'] => h1:fresh
@@ -91,7 +107,7 @@ def convert_docx_to_html(docx_file_path):
         r[style-name='Emphasis'] => em
         """
         
-        # Options for mammoth 1.8.0
+        # Options for mammoth
         options = {
             "convert_image": mammoth.images.img_element(handle_image),
             "style_map": style_map
@@ -113,20 +129,38 @@ def convert_docx_to_html(docx_file_path):
         # Post-processing with BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Fix numbering
-        ol = soup.new_tag('ol')
+        # Restructure content based on extracted structure
+        new_body = soup.new_tag('body')
+        for item in structure:
+            if item['type'] == 'paragraph':
+                para = soup.find('p', string=item['text'])
+                if para:
+                    new_body.append(para.extract())
+            elif item['type'] == 'table':
+                table = soup.find('table')
+                if table:
+                    new_body.append(table.extract())
+        
+        if soup.body:
+            soup.body.replace_with(new_body)
+        else:
+            soup.append(new_body)
+        
+        # Fix numbering and add list structure
+        current_list = None
         for p in soup.find_all('p'):
-            if p.text.strip().startswith('1.'):
+            text = p.text.strip()
+            if text and text[0].isdigit() and '.' in text:
+                number, content = text.split('.', 1)
+                if current_list is None:
+                    current_list = soup.new_tag('ol')
+                    p.insert_before(current_list)
                 li = soup.new_tag('li')
-                li.append(p.text.strip()[2:])
-                ol.append(li)
+                li.string = content.strip()
+                current_list.append(li)
+                p.decompose()
             else:
-                if ol.contents:
-                    soup.body.append(ol)
-                    ol = soup.new_tag('ol')
-                soup.body.append(p)
-        if ol.contents:
-            soup.body.append(ol)
+                current_list = None
         
         # Add default styling
         style = soup.new_tag('style')
@@ -137,6 +171,9 @@ def convert_docx_to_html(docx_file_path):
             img { max-width: 100%; height: auto; }
             ol { padding-left: 20px; }
             li { margin-bottom: 0.5em; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #ddd; padding: 8px; }
+            th { background-color: #f2f2f2; }
         """
         
         # Ensure proper HTML structure
@@ -150,13 +187,6 @@ def convert_docx_to_html(docx_file_path):
             soup.html.insert(0, head)
         
         soup.head.append(style)
-        
-        if soup.body is None:
-            body = soup.new_tag('body')
-            for tag in soup.html.contents:
-                if tag.name not in ['head', 'body']:
-                    body.append(tag.extract())
-            soup.html.append(body)
         
         # Save the updated HTML
         output_path = os.path.join(app.config['DATA_FOLDER'], html_file)
