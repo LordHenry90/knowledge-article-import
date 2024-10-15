@@ -82,22 +82,6 @@ def convert_docx_to_html(docx_file_path):
                 debug_print(f"Error handling image: {str(e)}")
                 return {"src": ""}
         
-        # Extract document structure using python-docx
-        doc = Document(docx_file_path)
-        structure = []
-        title = None
-        for para in doc.paragraphs:
-            if para.text.strip():
-                item = {
-                    'type': 'paragraph',
-                    'style': para.style.name,
-                    'text': para.text.strip()
-                }
-                if not title and (para.style.name.startswith('Heading') or para.style.name == 'Title'):
-                    title = item
-                else:
-                    structure.append(item)
-        
         # Custom style map
         style_map = """
         p[style-name='Heading 1'] => h1:fresh
@@ -133,52 +117,26 @@ def convert_docx_to_html(docx_file_path):
         # Post-processing with BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Restructure content based on extracted structure
-        new_body = soup.new_tag('body')
-        
-        # Add title if found
-        if title:
-            title_tag = soup.new_tag('h1')
-            title_tag.string = title['text']
-            new_body.append(title_tag)
-        
+        # Process numbered lists
         current_list = None
-        list_item_count = 0
-        
-        for item in structure:
-            if item['type'] == 'paragraph':
-                text = item['text']
-                if text.startswith(('1.', '2.', '3.', '4.', '5.')):
-                    if current_list is None:
-                        current_list = soup.new_tag('ol')
-                        new_body.append(current_list)
-                        list_item_count = 0
-                    list_item_count += 1
-                    li = soup.new_tag('li')
-                    content = text.split('.', 1)[1].strip()
-                    li.string = content
-                    current_list.append(li)
-                    
-                    # Find and move the corresponding image
-                    next_img = soup.find('img')
-                    if next_img:
-                        li.append(next_img.extract())
-                else:
-                    if current_list and list_item_count > 0:
-                        current_list = None
-                    para = soup.find('p', string=text)
-                    if para:
-                        new_body.append(para.extract())
-                    else:
-                        new_para = soup.new_tag('p')
-                        new_para.string = text
-                        new_body.append(new_para)
-        
-        # Replace the existing body with the new structured body
-        if soup.body:
-            soup.body.replace_with(new_body)
-        else:
-            soup.append(new_body)
+        for p in soup.find_all('p'):
+            text = p.get_text().strip()
+            if text and text[0].isdigit() and '.' in text:
+                number, content = text.split('.', 1)
+                if current_list is None or int(number) == 1:
+                    current_list = soup.new_tag('ol')
+                    p.replace_with(current_list)
+                li = soup.new_tag('li')
+                li.string = content.strip()
+                current_list.append(li)
+                
+                # Move the next image into the list item if it exists
+                next_sibling = current_list.find_next_sibling()
+                if next_sibling and next_sibling.name == 'p' and next_sibling.find('img'):
+                    li.append(next_sibling.find('img').extract())
+                    next_sibling.decompose()
+            else:
+                current_list = None
         
         # Add default styling
         style = soup.new_tag('style')
@@ -189,9 +147,6 @@ def convert_docx_to_html(docx_file_path):
             img { max-width: 100%; height: auto; margin-top: 10px; margin-bottom: 10px; }
             ol { padding-left: 20px; }
             li { margin-bottom: 0.5em; }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 1px solid #ddd; padding: 8px; }
-            th { background-color: #f2f2f2; }
             strong { font-weight: bold; }
         """
         
@@ -206,6 +161,13 @@ def convert_docx_to_html(docx_file_path):
             soup.html.insert(0, head)
         
         soup.head.append(style)
+        
+        if soup.body is None:
+            body = soup.new_tag('body')
+            for tag in soup.html.contents:
+                if tag.name not in ['head', 'body']:
+                    body.append(tag.extract())
+            soup.html.append(body)
         
         # Save the updated HTML
         output_path = os.path.join(app.config['DATA_FOLDER'], html_file)
