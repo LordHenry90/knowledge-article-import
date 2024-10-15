@@ -213,9 +213,5 @@ def clear_files_route():
     clear_files()
     return redirect(url_for('upload_file'))
 
-@app.errorhandler(413)
-def request_entity_too_large(error):
-    return "File too large", 413
-
 if __name__ == '__main__':
     app.run(debug=True)
