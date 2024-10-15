@@ -61,6 +61,20 @@ def convert_docx_to_html(docx_file_path):
             debug_print(f"Error: DOCX file not found: {docx_file_path}")
             return None, [f"Error: DOCX file not found: {docx_file_path}"]
         
+        # Ensure the images directory exists
+        images_dir = os.path.join(app.config['DATA_FOLDER'], 'images')
+        os.makedirs(images_dir, exist_ok=True)
+        
+        def handle_image(image):
+            with image.open() as image_bytes:
+                image_data = image_bytes.read()
+            extension = image.content_type.split("/")[1]
+            image_filename = f"{uuid.uuid4()}.{extension}"
+            image_path = os.path.join('images', image_filename)
+            with open(os.path.join(app.config['DATA_FOLDER'], image_path), "wb") as f:
+                f.write(image_data)
+            return {"src": image_path}
+        
         # Options for mammoth 1.8.0
         options = {
             "style_map": [
@@ -74,10 +88,7 @@ def convert_docx_to_html(docx_file_path):
                 "r[style-name='Emphasis'] => em"
             ],
             "ignore_empty_paragraphs": False,
-            "convert_image": mammoth.images.img_element(lambda image: {
-                "src": image.src,
-                "alt": image.alt_text
-            })
+            "convert_image": mammoth.images.img_element(handle_image)
         }
         
         with open(docx_file_path, "rb") as docx_file:
@@ -94,31 +105,6 @@ def convert_docx_to_html(docx_file_path):
         
         # Post-processing with BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
-        
-        # Process images
-        for img in soup.find_all('img'):
-            src = img.get('src')
-            if src:
-                debug_print(f"Processing image with src: {src}")
-                
-                # Generate a unique filename
-                img_filename = f"{uuid.uuid4()}.png"  # Assuming PNG for simplicity
-                img_path = os.path.join('images', img_filename)
-                
-                # Ensure the images directory exists
-                os.makedirs(os.path.join(app.config['DATA_FOLDER'], 'images'), exist_ok=True)
-                
-                # Save the image
-                image_data = base64.b64decode(src.split(',')[1]) if ',' in src else src
-                with open(os.path.join(app.config['DATA_FOLDER'], img_path), "wb") as f:
-                    f.write(image_data)
-                
-                # Update src attribute
-                img['src'] = img_path
-            else:
-                debug_print(f"Image without src attribute found")
-        
-        debug_print(f"Image processing completed for {docx_file_path}")
         
         # Add default styling
         style = soup.new_tag('style')
