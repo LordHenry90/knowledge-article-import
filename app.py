@@ -121,19 +121,15 @@ def process_docx(file_path, output_path):
                 img_path = os.path.join(images_path, img_filename)
                 with open(img_path, 'wb') as img_file:
                     img_file.write(img_data)
-                image_replacements.append((f'image_{img_counter}', f'images/{img_filename}'))
+                image_replacements.append((f'relationships/{rel.rId}', f'images/{img_filename}'))
 
         # Replace each image placeholder correctly in the HTML content
-        for img_id, img_path in image_replacements:
-            html_content = html_content.replace(f'src="{img_id}"', f'src="{img_path}"')
-
-        # Post-process HTML to fix list numbering using BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
-        ordered_lists = soup.find_all('ol')
-        for ol in ordered_lists:
-            list_items = ol.find_all('li')
-            for index, li in enumerate(list_items, start=1):
-                li['value'] = str(index)
+        for img_tag in soup.find_all('img'):
+            if 'src' in img_tag.attrs:
+                for img_id, img_path in image_replacements:
+                    if img_id in img_tag['src']:
+                        img_tag['src'] = img_path
 
         # Convert the modified soup back to HTML
         html_content = str(soup)
