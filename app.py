@@ -37,42 +37,52 @@ def save_image(image_data, extension):
 def convert_docx_to_html(docx_file):
     html_file = os.path.splitext(docx_file)[0] + '.html'
     
-    with open(os.path.join(app.config['UPLOAD_FOLDER'], docx_file), "rb") as docx:
-        result = mammoth.convert_to_html(docx)
-        html = result.value
-        messages = result.messages
-    
-    soup = BeautifulSoup(html, 'html.parser')
-    
-    # Process images
-    for img in soup.find_all('img'):
-        if img.get('src', '').startswith('data:image'):
-            # Extract image data and type
-            img_data = img['src'].split(',')[1]
-            img_type = img['src'].split(';')[0].split('/')[1]
-            
-            # Decode base64 and save image
-            image_data = base64.b64decode(img_data)
-            img_path = save_image(image_data, f".{img_type}")
-            
-            # Update src attribute
-            img['src'] = img_path
-    
-    # Add default styling
-    style = soup.new_tag('style')
-    style.string = """
-        body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-        h1, h2, h3, h4, h5, h6 { margin-top: 1em; margin-bottom: 0.5em; }
-        p { margin-bottom: 1em; }
-        img { max-width: 100%; height: auto; }
-    """
-    soup.head.append(style)
-    
-    # Save the updated HTML
-    with open(os.path.join(app.config['DATA_FOLDER'], html_file), "w", encoding="utf-8") as f:
-        f.write(str(soup))
-    
-    return html_file, messages
+    try:
+        with open(os.path.join(app.config['UPLOAD_FOLDER'], docx_file), "rb") as docx:
+            result = mammoth.convert_to_html(docx)
+            html = result.value
+            messages = result.messages
+        
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Process images
+        for img in soup.find_all('img'):
+            if img.get('src', '').startswith('data:image'):
+                # Extract image data and type
+                img_data = img['src'].split(',')[1]
+                img_type = img['src'].split(';')[0].split('/')[1]
+                
+                # Decode base64 and save image
+                image_data = base64.b64decode(img_data)
+                img_path = save_image(image_data, f".{img_type}")
+                
+                # Update src attribute
+                img['src'] = img_path
+        
+        # Add default styling
+        style = soup.new_tag('style')
+        style.string = """
+            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+            h1, h2, h3, h4, h5, h6 { margin-top: 1em; margin-bottom: 0.5em; }
+            p { margin-bottom: 1em; }
+            img { max-width: 100%; height: auto; }
+        """
+        
+        # Check if head exists, if not create it
+        if soup.head is None:
+            head = soup.new_tag('head')
+            soup.html.insert(0, head)
+        
+        soup.head.append(style)
+        
+        # Save the updated HTML
+        with open(os.path.join(app.config['DATA_FOLDER'], html_file), "w", encoding="utf-8") as f:
+            f.write(str(soup))
+        
+        return html_file, messages
+    except Exception as e:
+        app.logger.error(f"Error converting {docx_file} to HTML: {str(e)}", exc_info=True)
+        return None, [f"Error converting {docx_file}: {str(e)}"]
 
 def create_csv_record(filename):
     title = os.path.splitext(filename)[0].replace('_', ' ')
@@ -134,8 +144,12 @@ def upload_file():
             html_files = []
             for filename in filenames:
                 html_file, msg = convert_docx_to_html(filename)
-                html_files.append(html_file)
+                if html_file:
+                    html_files.append(html_file)
                 messages.extend(msg)
+            
+            if not html_files:
+                raise Exception("No HTML files were generated. Check the logs for details.")
             
             csv_records = [create_csv_record(html_file) for html_file in html_files]
             csv_file = create_csv_file(csv_records)
