@@ -26,7 +26,6 @@ def index():
 
 @app.route('/', methods=['POST'])
 def upload_files():
-
     for folder in [UPLOAD_FOLDER, DATA_FOLDER, IMAGES_FOLDER]:
         if not os.path.exists(folder):
             os.makedirs(folder)
@@ -40,7 +39,6 @@ def upload_files():
 
 @app.route('/process', methods=['GET'])
 def process_files():
-
     for folder in [UPLOAD_FOLDER, DATA_FOLDER, IMAGES_FOLDER]:
         if not os.path.exists(folder):
             os.makedirs(folder)
@@ -101,10 +99,16 @@ def create_csv(content_files):
 def create_zip_file():
     zip_path = os.path.join(app.config['DATA_FOLDER'], 'KnowledgeArticlesImport.zip')
     with zipfile.ZipFile(zip_path, 'w') as zipf:
-        # Add all relevant files to the ZIP
+        # Add content.properties and KnowledgeArticlesImport.csv to the ZIP
+        content_properties_path = os.path.join(app.config['DATA_FOLDER'], 'content.properties')
+        csv_path = os.path.join(app.config['DATA_FOLDER'], 'KnowledgeArticlesImport.csv')
+        zipf.write(content_properties_path, 'content.properties')
+        zipf.write(csv_path, 'KnowledgeArticlesImport.csv')
+        
+        # Add HTML files and images under the data/ folder
         for folder_name, subfolders, filenames in os.walk(app.config['DATA_FOLDER']):
             for filename in filenames:
-                if filename != 'KnowledgeArticlesImport.zip':
+                if filename not in ['KnowledgeArticlesImport.zip', 'content.properties', 'KnowledgeArticlesImport.csv']:
                     file_path = os.path.join(folder_name, filename)
                     zipf.write(file_path, os.path.relpath(file_path, app.config['DATA_FOLDER']))
 
