@@ -2,7 +2,6 @@ from flask import Flask, request, send_file, render_template, url_for, redirect
 from werkzeug.utils import secure_filename
 import os
 import zipfile
-import mammoth
 import shutil
 from PIL import Image
 import csv
@@ -104,14 +103,15 @@ def process_docx(file_path, output_path):
         os.makedirs(root_data_path, exist_ok=True)
         os.makedirs(images_path, exist_ok=True)
 
-        # Extract content from DOCX using mammoth without converting images to base64
-        with open(file_path, "rb") as docx_file:
-            result = mammoth.convert_to_html(docx_file)
-            html_content = result.value  # The generated HTML
+        # Extract content from DOCX using python-docx without converting images to base64
+        doc = Document(file_path)
+        html_content = ""
+        img_counter = 0
+
+        for para in doc.paragraphs:
+            html_content += f"<p>{para.text}</p>"
 
         # Extract images from DOCX
-        doc = Document(file_path)
-        img_counter = 0
         image_replacements = []
         for rel in doc.part.rels.values():
             if "image" in rel.target_ref:
