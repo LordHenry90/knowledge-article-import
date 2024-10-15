@@ -67,7 +67,7 @@ def convert_docx_to_html(docx_file_path):
         
         def handle_image(image):
             try:
-                content_type = image.content_type or 'image/png'  # Default to PNG if content_type is None
+                content_type = image.content_type or 'image/png'
                 extension = content_type.split("/")[1]
                 image_filename = f"{uuid.uuid4()}.{extension}"
                 image_path = os.path.join('images', image_filename)
@@ -79,9 +79,22 @@ def convert_docx_to_html(docx_file_path):
                 debug_print(f"Error handling image: {str(e)}")
                 return {"src": ""}
         
+        # Custom style map
+        style_map = """
+        p[style-name='Heading 1'] => h1:fresh
+        p[style-name='Heading 2'] => h2:fresh
+        p[style-name='Heading 3'] => h3:fresh
+        p[style-name='Heading 4'] => h4:fresh
+        p[style-name='Heading 5'] => h5:fresh
+        p[style-name='Heading 6'] => h6:fresh
+        r[style-name='Strong'] => strong
+        r[style-name='Emphasis'] => em
+        """
+        
         # Options for mammoth 1.8.0
         options = {
-            "convert_image": mammoth.images.img_element(handle_image)
+            "convert_image": mammoth.images.img_element(handle_image),
+            "style_map": style_map
         }
         
         with open(docx_file_path, "rb") as docx_file:
@@ -100,6 +113,21 @@ def convert_docx_to_html(docx_file_path):
         # Post-processing with BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
         
+        # Fix numbering
+        ol = soup.new_tag('ol')
+        for p in soup.find_all('p'):
+            if p.text.strip().startswith('1.'):
+                li = soup.new_tag('li')
+                li.append(p.text.strip()[2:])
+                ol.append(li)
+            else:
+                if ol.contents:
+                    soup.body.append(ol)
+                    ol = soup.new_tag('ol')
+                soup.body.append(p)
+        if ol.contents:
+            soup.body.append(ol)
+        
         # Add default styling
         style = soup.new_tag('style')
         style.string = """
@@ -107,6 +135,8 @@ def convert_docx_to_html(docx_file_path):
             h1, h2, h3, h4, h5, h6 { margin-top: 1em; margin-bottom: 0.5em; }
             p { margin-bottom: 1em; }
             img { max-width: 100%; height: auto; }
+            ol { padding-left: 20px; }
+            li { margin-bottom: 0.5em; }
         """
         
         # Ensure proper HTML structure
