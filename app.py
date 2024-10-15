@@ -61,9 +61,8 @@ def convert_docx_to_html(docx_file_path):
             debug_print(f"Error: DOCX file not found: {docx_file_path}")
             return None, [f"Error: DOCX file not found: {docx_file_path}"]
         
-        # Custom options for mammoth
+        # Options for mammoth 1.8.0
         options = {
-            "ignore_empty_paragraphs": False,
             "style_map": [
                 "p[style-name='Heading 1'] => h1:fresh",
                 "p[style-name='Heading 2'] => h2:fresh",
@@ -73,11 +72,12 @@ def convert_docx_to_html(docx_file_path):
                 "p[style-name='Heading 6'] => h6:fresh",
                 "r[style-name='Strong'] => strong",
                 "r[style-name='Emphasis'] => em"
-            ]
+            ],
+            "ignore_empty_paragraphs": False
         }
         
         with open(docx_file_path, "rb") as docx_file:
-            result = mammoth.convert_to_html(docx_file, options=options)
+            result = mammoth.convert_to_html(docx_file, **options)
         
         html = result.value
         messages = result.messages
@@ -101,6 +101,9 @@ def convert_docx_to_html(docx_file_path):
                 # Generate a unique filename
                 img_filename = f"{uuid.uuid4()}.{img_type}"
                 img_path = os.path.join('images', img_filename)
+                
+                # Ensure the images directory exists
+                os.makedirs(os.path.join(app.config['DATA_FOLDER'], 'images'), exist_ok=True)
                 
                 # Save the image
                 with open(os.path.join(app.config['DATA_FOLDER'], img_path), "wb") as f:
