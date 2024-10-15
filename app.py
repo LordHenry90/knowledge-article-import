@@ -1,4 +1,4 @@
-from flask import Flask, request, send_file, render_template, url_for
+from flask import Flask, request, send_file, render_template, url_for, redirect
 from werkzeug.utils import secure_filename
 import os
 import zipfile
@@ -11,10 +11,10 @@ import logging
 from bs4 import BeautifulSoup
 from docx import Document
 
-# Inizializza Flask app
+# Initialize Flask app
 app = Flask(__name__)
 
-# Configura logging
+# Configure logging
 logging.basicConfig(level=logging.DEBUG)
 
 # Upload folder
@@ -25,12 +25,12 @@ app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-# Home
+# Home route
 @app.route('/')
 def index():
     return render_template('index.html', design_system=True)
 
-# Upload
+# Upload route
 @app.route('/upload', methods=['POST'])
 def upload():
     try:
@@ -51,13 +51,13 @@ def upload():
             file.save(file_path)
             process_docx(file_path, output_path)
 
-        # Output del file Zip
+        # Zip output
         zip_path = os.path.join(OUTPUT_FOLDER, 'KnowledgeArticlesImport.zip')
         with zipfile.ZipFile(zip_path, 'w') as zipf:
-            # Aggiungi content.properties e CSV file
+            # Add content.properties and CSV file
             zipf.write(os.path.join(output_path, 'content.properties'), 'content.properties')
             zipf.write(os.path.join(output_path, 'KnowledgeArticlesImport.csv'), 'KnowledgeArticlesImport.csv')
-            # Aggiungi file al folder data
+            # Add files from data folder
             data_path = os.path.join(output_path, 'data')
             for root, _, files in os.walk(data_path):
                 for file in files:
@@ -68,7 +68,7 @@ def upload():
         logging.error(f"Error occurred during upload: {e}")
         return f"An error occurred: {e}", 500
 
-# Download del file zip
+# Download route
 @app.route('/download')
 def download_zip():
     try:
@@ -78,7 +78,25 @@ def download_zip():
         logging.error(f"Error occurred during download: {e}")
         return f"An error occurred: {e}", 500
 
-# Processa i file DOCX
+# Delete uploaded files and generated output
+@app.route('/delete', methods=['POST'])
+def delete_files():
+    try:
+        # Delete uploaded files
+        for root, dirs, files in os.walk(UPLOAD_FOLDER):
+            for file in files:
+                os.remove(os.path.join(root, file))
+
+        # Delete generated output
+        shutil.rmtree(OUTPUT_FOLDER)
+        os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
+        return redirect(url_for('index'))
+    except Exception as e:
+        logging.error(f"Error occurred during file deletion: {e}")
+        return f"An error occurred: {e}", 500
+
+# Process DOCX file
 def process_docx(file_path, output_path):
     try:
         root_data_path = os.path.join(output_path, 'data')
@@ -86,12 +104,12 @@ def process_docx(file_path, output_path):
         os.makedirs(root_data_path, exist_ok=True)
         os.makedirs(images_path, exist_ok=True)
 
-        # Estrazione del contenuto da DOCX usando mammoth senza convertire immagini a base 64
+        # Extract content from DOCX using mammoth without converting images to base64
         with open(file_path, "rb") as docx_file:
             result = mammoth.convert_to_html(docx_file)
             html_content = result.value  # The generated HTML
 
-        # Estrazione delle immagini dal DOCX
+        # Extract images from DOCX
         doc = Document(file_path)
         img_counter = 0
         for rel in doc.part.rels.values():
@@ -103,10 +121,10 @@ def process_docx(file_path, output_path):
                 with open(img_path, 'wb') as img_file:
                     img_file.write(img_data)
 
-                # Sostituzione del placeholder con il corretto path dell'immagine
+                # Replace the placeholder for the image with the correct path
                 html_content = re.sub(r'data:image/[^;]+;base64,[^"]+', f'images/{img_filename}', html_content)
 
-        # Fix elenchi numerati con BeautifulSoup
+        # Post-process HTML to fix list numbering using BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
         ordered_lists = soup.find_all('ol')
         for ol in ordered_lists:
@@ -114,17 +132,17 @@ def process_docx(file_path, output_path):
             for index, li in enumerate(list_items, start=1):
                 li['value'] = str(index)
 
-        # Conversione del soup a HTML
+        # Convert the modified soup back to HTML
         html_content = str(soup)
 
-        # Crea file HTML
+        # Create HTML file
         html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
         html_filename = secure_filename(os.path.splitext(os.path.basename(file_path))[0]) + '.html'
         html_path = os.path.join(root_data_path, html_filename)
         with open(html_path, 'w', encoding='utf-8') as html_file:
             html_file.write(html_content)
 
-        # Crea content.properties
+        # Create content.properties
         properties_path = os.path.join(output_path, 'content.properties')
         with open(properties_path, 'w') as prop_file:
             prop_file.write("CSVEncoding=UTF8\n")
@@ -132,7 +150,7 @@ def process_docx(file_path, output_path):
             prop_file.write("CSVSeparator=,\n")
             prop_file.write("#DateFormat=yyyy-MM-dd\n")
 
-        # Crea CSV file
+        # Create CSV file
         csv_path = os.path.join(output_path, 'KnowledgeArticlesImport.csv')
         csv_exists = os.path.exists(csv_path)
         with open(csv_path, 'a', newline='', encoding='utf-8') as csv_file:
