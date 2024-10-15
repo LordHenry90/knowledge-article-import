@@ -26,6 +26,10 @@ def index():
 
 @app.route('/', methods=['POST'])
 def upload_files():
+
+    for folder in [UPLOAD_FOLDER, DATA_FOLDER, IMAGES_FOLDER]:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
     if 'file' not in request.files:
         return 'No files part'
     files = request.files.getlist('file')
@@ -36,6 +40,10 @@ def upload_files():
 
 @app.route('/process', methods=['GET'])
 def process_files():
+
+    for folder in [UPLOAD_FOLDER, DATA_FOLDER, IMAGES_FOLDER]:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
     content_files = []
     for filename in os.listdir(app.config['UPLOAD_FOLDER']):
         if filename.endswith('.docx'):
@@ -108,6 +116,8 @@ def download_zip():
 @app.route('/clear', methods=['POST'])
 def clear_files():
     for folder in [UPLOAD_FOLDER, DATA_FOLDER, IMAGES_FOLDER]:
+        if not os.path.exists(folder):
+            os.makedirs(folder)
         for filename in os.listdir(folder):
             file_path = os.path.join(folder, filename)
             if os.path.isfile(file_path) or os.path.islink(file_path):
