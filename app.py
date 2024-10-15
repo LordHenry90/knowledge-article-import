@@ -38,10 +38,17 @@ def convert_docx_to_html(docx_file):
     html_file = os.path.splitext(docx_file)[0] + '.html'
     
     try:
+        app.logger.info(f"Starting conversion of {docx_file}")
         with open(os.path.join(app.config['UPLOAD_FOLDER'], docx_file), "rb") as docx:
             result = mammoth.convert_to_html(docx)
             html = result.value
             messages = result.messages
+        
+        app.logger.info(f"Mammoth conversion completed for {docx_file}")
+        
+        if not html:
+            app.logger.error(f"Mammoth produced empty HTML for {docx_file}")
+            return None, [f"Error: Empty HTML produced for {docx_file}"]
         
         soup = BeautifulSoup(html, 'html.parser')
         
@@ -58,6 +65,8 @@ def convert_docx_to_html(docx_file):
                 
                 # Update src attribute
                 img['src'] = img_path
+        
+        app.logger.info(f"Image processing completed for {docx_file}")
         
         # Add default styling
         style = soup.new_tag('style')
@@ -76,8 +85,11 @@ def convert_docx_to_html(docx_file):
         soup.head.append(style)
         
         # Save the updated HTML
-        with open(os.path.join(app.config['DATA_FOLDER'], html_file), "w", encoding="utf-8") as f:
+        output_path = os.path.join(app.config['DATA_FOLDER'], html_file)
+        with open(output_path, "w", encoding="utf-8") as f:
             f.write(str(soup))
+        
+        app.logger.info(f"HTML file saved: {output_path}")
         
         return html_file, messages
     except Exception as e:
@@ -119,14 +131,18 @@ def clear_files():
 def upload_file():
     if request.method == 'POST':
         try:
+            app.logger.info("File upload initiated")
             if 'file' not in request.files:
+                app.logger.warning("No file part in the request")
                 return redirect(request.url)
             files = request.files.getlist('file')
             if not files or files[0].filename == '':
+                app.logger.warning("No selected file")
                 return redirect(request.url)
             
             # Clear previous data
             clear_files()
+            app.logger.info("Previous files cleared")
             
             for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER'], app.config['IMAGES_FOLDER']]:
                 os.makedirs(folder, exist_ok=True)
@@ -136,26 +152,35 @@ def upload_file():
             for file in files:
                 if file and file.filename.endswith('.docx'):
                     filename = secure_filename(file.filename)
-                    file.save(os.path.join(app.config['UPLOAD_FOLDER'], filename))
+                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                    file.save(file_path)
                     filenames.append(filename)
+                    app.logger.info(f"File saved: {file_path}")
             
             create_content_properties()
+            app.logger.info("Content properties created")
             
             html_files = []
             for filename in filenames:
                 html_file, msg = convert_docx_to_html(filename)
                 if html_file:
                     html_files.append(html_file)
+                    app.logger.info(f"HTML file generated: {html_file}")
+                else:
+                    app.logger.error(f"Failed to generate HTML for {filename}")
                 messages.extend(msg)
             
             if not html_files:
+                app.logger.error("No HTML files were generated")
                 raise Exception("No HTML files were generated. Check the logs for details.")
             
             csv_records = [create_csv_record(html_file) for html_file in html_files]
             csv_file = create_csv_file(csv_records)
+            app.logger.info(f"CSV file created: {csv_file}")
             
             files_to_zip = filenames + [csv_file]
             create_zip_file(files_to_zip)
+            app.logger.info(f"Zip file created: {app.config['OUTPUT_ZIP']}")
             
             return send_file(app.config['OUTPUT_ZIP'], as_attachment=True)
         except Exception as e:
