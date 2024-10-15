@@ -9,6 +9,8 @@ import csv
 import zipfile
 import shutil
 from bs4 import BeautifulSoup
+import traceback
+
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -64,12 +66,15 @@ def convert_docx_to_html(docx_file):
             messages = result.messages
         
         debug_print(f"Mammoth conversion completed for {docx_file}")
+        debug_print(f"HTML content: {html[:500]}...")  # Print first 500 characters of HTML
         
         if not html:
             debug_print(f"Mammoth produced empty HTML for {docx_file}")
             return None, [f"Error: Empty HTML produced for {docx_file}"]
         
         soup = BeautifulSoup(html, 'html.parser')
+        
+        debug_print(f"BeautifulSoup parsed HTML structure: {soup.prettify()[:500]}...")  # Print first 500 characters of parsed structure
         
         # Process images
         for img in soup.find_all('img'):
@@ -96,12 +101,31 @@ def convert_docx_to_html(docx_file):
             img { max-width: 100%; height: auto; }
         """
         
+        # Check if html tag exists, if not create it
+        if soup.html is None:
+            debug_print("HTML tag not found, creating one")
+            new_html = soup.new_tag('html')
+            new_html.append(soup)
+            soup = BeautifulSoup(str(new_html), 'html.parser')
+        
         # Check if head exists, if not create it
         if soup.head is None:
+            debug_print("Head tag not found, creating one")
             head = soup.new_tag('head')
             soup.html.insert(0, head)
         
         soup.head.append(style)
+        
+        # Check if body exists, if not create it and move content
+        if soup.body is None:
+            debug_print("Body tag not found, creating one")
+            body = soup.new_tag('body')
+            for tag in soup.html.contents:
+                if tag.name not in ['head', 'body']:
+                    body.append(tag.extract())
+            soup.html.append(body)
+        
+        debug_print(f"Final HTML structure: {soup.prettify()[:500]}...")  # Print first 500 characters of final structure
         
         # Save the updated HTML
         output_path = os.path.join(app.config['DATA_FOLDER'], html_file)
@@ -113,6 +137,7 @@ def convert_docx_to_html(docx_file):
         return html_file, messages
     except Exception as e:
         debug_print(f"Error converting {docx_file} to HTML: {str(e)}")
+        debug_print(f"Exception details: {traceback.format_exc()}")
         return None, [f"Error converting {docx_file}: {str(e)}"]
 
 def create_csv_record(filename):
