@@ -113,7 +113,7 @@ def process_docx(file_path, output_path):
         doc = Document(file_path)
         img_counter = 0
         html_parts = []  # To maintain sequential content and images
-        for block in doc.element.body:
+        for block in doc.element.body.iterchildren():
             if block.tag == qn('w:p'):
                 # Handle paragraphs
                 paragraph = Paragraph(block, doc)
@@ -122,13 +122,15 @@ def process_docx(file_path, output_path):
                 # Handle images
                 img_counter += 1
                 blip = block.xpath('.//a:blip', namespaces={'a': 'http://schemas.openxmlformats.org/drawingml/2006/main'})[0]
-                img_part = doc.part.related_parts[blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')]
-                img_data = img_part.blob
-                img_filename = f'image_{img_counter}.png'
-                img_path = os.path.join(images_path, img_filename)
-                with open(img_path, 'wb') as img_file:
-                    img_file.write(img_data)
-                html_parts.append(f'<img src="images/{img_filename}" alt="Image {img_counter}" />')
+                embed_rel = blip.get('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}embed')
+                if embed_rel:
+                    img_part = doc.part.related_parts[embed_rel]
+                    img_data = img_part.blob
+                    img_filename = f'image_{img_counter}.png'
+                    img_path = os.path.join(images_path, img_filename)
+                    with open(img_path, 'wb') as img_file:
+                        img_file.write(img_data)
+                    html_parts.append(f'<img src="images/{img_filename}" alt="Image {img_counter}" />')
 
         # Combine all parts to form the final HTML
         html_content = ''.join(html_parts)
