@@ -1,328 +1,116 @@
-import os
-import sys
-import base64
-import hashlib
-import traceback
 from flask import Flask, render_template, request, send_file, redirect, url_for
-from werkzeug.utils import secure_filename
+import os
 import mammoth
+from docx import Document
+import shutil
 import csv
 import zipfile
-import shutil
-from bs4 import BeautifulSoup
-import uuid
-from docx import Document
-from docx.shared import Pt
-from docx.enum.style import WD_STYLE_TYPE
-
 
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = os.path.abspath('uploads')
-app.config['DATA_FOLDER'] = os.path.abspath('data')
-app.config['IMAGES_FOLDER'] = os.path.join(app.config['DATA_FOLDER'], 'images')
-app.config['OUTPUT_ZIP'] = 'KnowledgeArticlesImport.zip'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16 MB limit
+UPLOAD_FOLDER = 'uploads'
+DATA_FOLDER = 'data'
+IMAGES_FOLDER = os.path.join(DATA_FOLDER, 'images')
 
-def debug_print(*args, **kwargs):
-    print(*args, file=sys.stderr, **kwargs)
+app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+app.config['DATA_FOLDER'] = DATA_FOLDER
+app.config['IMAGES_FOLDER'] = IMAGES_FOLDER
 
-def create_content_properties():
-    content = """CSVEncoding=UTF8
-RTAEncoding=UTF8
-CSVSeparator=,
-#DateFormat=yyyy-MM-dd"""
-    with open('content.properties', 'w') as f:
-        f.write(content)
+# Ensure folders exist
+for folder in [UPLOAD_FOLDER, DATA_FOLDER, IMAGES_FOLDER]:
+    if not os.path.exists(folder):
+        os.makedirs(folder)
 
-def save_image(image_data, extension):
-    image_hash = hashlib.md5(image_data).hexdigest()
-    image_filename = f"{image_hash}{extension}"
-    image_path = os.path.join(app.config['IMAGES_FOLDER'], image_filename)
-    
-    if not os.path.exists(image_path):
-        with open(image_path, "wb") as f:
-            f.write(image_data)
-    
-    return f"images/{image_filename}"
-
-def verify_docx(file_path):
-    try:
-        with open(file_path, "rb") as docx:
-            mammoth.extract_raw_text(docx)
-        return True
-    except Exception as e:
-        debug_print(f"Error verifying DOCX file {file_path}: {str(e)}")
-        return False
-
-import mammoth
-from bs4 import BeautifulSoup
-import os
-import uuid
-
-import mammoth
-from bs4 import BeautifulSoup
-import os
-import uuid
-from docx import Document
-from docx.shared import Pt
-from docx.enum.style import WD_STYLE_TYPE
-
-def convert_docx_to_html(docx_file_path):
-    html_file = os.path.splitext(os.path.basename(docx_file_path))[0] + '.html'
-    
-    try:
-        debug_print(f"Starting conversion of {docx_file_path}")
-        
-        if not os.path.exists(docx_file_path):
-            debug_print(f"Error: DOCX file not found: {docx_file_path}")
-            return None, [f"Error: DOCX file not found: {docx_file_path}"]
-        
-        # Ensure the images directory exists
-        images_dir = os.path.join(app.config['DATA_FOLDER'], 'images')
-        os.makedirs(images_dir, exist_ok=True)
-        
-        def handle_image(image):
-            try:
-                content_type = image.content_type or 'image/png'
-                extension = content_type.split("/")[1]
-                image_filename = f"{uuid.uuid4()}.{extension}"
-                image_path = os.path.join('images', image_filename)
-                with image.open() as image_bytes, open(os.path.join(app.config['DATA_FOLDER'], image_path), "wb") as f:
-                    f.write(image_bytes.read())
-                debug_print(f"Image saved: {image_path}")
-                return {"src": image_path}
-            except Exception as e:
-                debug_print(f"Error handling image: {str(e)}")
-                return {"src": ""}
-        
-        # Extract document structure using python-docx
-        doc = Document(docx_file_path)
-        structure = []
-        for para in doc.paragraphs:
-            if para.text.strip():
-                structure.append({
-                    'type': 'paragraph',
-                    'style': para.style.name,
-                    'text': para.text
-                })
-        for table in doc.tables:
-            structure.append({'type': 'table'})
-        
-        # Custom style map
-        style_map = """
-        p[style-name='Heading 1'] => h1:fresh
-        p[style-name='Heading 2'] => h2:fresh
-        p[style-name='Heading 3'] => h3:fresh
-        p[style-name='Heading 4'] => h4:fresh
-        p[style-name='Heading 5'] => h5:fresh
-        p[style-name='Heading 6'] => h6:fresh
-        r[style-name='Strong'] => strong
-        r[style-name='Emphasis'] => em
-        """
-        
-        # Options for mammoth
-        options = {
-            "convert_image": mammoth.images.img_element(handle_image),
-            "style_map": style_map
-        }
-        
-        with open(docx_file_path, "rb") as docx_file:
-            result = mammoth.convert_to_html(docx_file, **options)
-        
-        html = result.value
-        messages = result.messages
-        
-        debug_print(f"Mammoth conversion completed for {docx_file_path}")
-        debug_print(f"Conversion messages: {messages}")
-        
-        if not html:
-            debug_print(f"Mammoth produced empty HTML for {docx_file_path}")
-            return None, [f"Error: Empty HTML produced for {docx_file_path}"]
-        
-        # Post-processing with BeautifulSoup
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Restructure content based on extracted structure
-        new_body = soup.new_tag('body')
-        for item in structure:
-            if item['type'] == 'paragraph':
-                para = soup.find('p', string=item['text'])
-                if para:
-                    new_body.append(para.extract())
-            elif item['type'] == 'table':
-                table = soup.find('table')
-                if table:
-                    new_body.append(table.extract())
-        
-        if soup.body:
-            soup.body.replace_with(new_body)
-        else:
-            soup.append(new_body)
-        
-        # Fix numbering and add list structure
-        current_list = None
-        for p in soup.find_all('p'):
-            text = p.text.strip()
-            if text and text[0].isdigit() and '.' in text:
-                number, content = text.split('.', 1)
-                if current_list is None:
-                    current_list = soup.new_tag('ol')
-                    p.insert_before(current_list)
-                li = soup.new_tag('li')
-                li.string = content.strip()
-                current_list.append(li)
-                p.decompose()
-            else:
-                current_list = None
-        
-        # Add default styling
-        style = soup.new_tag('style')
-        style.string = """
-            body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
-            h1, h2, h3, h4, h5, h6 { margin-top: 1em; margin-bottom: 0.5em; }
-            p { margin-bottom: 1em; }
-            img { max-width: 100%; height: auto; }
-            ol { padding-left: 20px; }
-            li { margin-bottom: 0.5em; }
-            table { border-collapse: collapse; width: 100%; }
-            th, td { border: 1px solid #ddd; padding: 8px; }
-            th { background-color: #f2f2f2; }
-        """
-        
-        # Ensure proper HTML structure
-        if soup.html is None:
-            new_html = soup.new_tag('html')
-            new_html.append(soup)
-            soup = BeautifulSoup(str(new_html), 'html.parser')
-        
-        if soup.head is None:
-            head = soup.new_tag('head')
-            soup.html.insert(0, head)
-        
-        soup.head.append(style)
-        
-        # Save the updated HTML
-        output_path = os.path.join(app.config['DATA_FOLDER'], html_file)
-        with open(output_path, "w", encoding="utf-8") as f:
-            f.write(str(soup))
-        
-        debug_print(f"HTML file saved: {output_path}")
-        
-        return html_file, messages
-    except Exception as e:
-        debug_print(f"Error converting {docx_file_path} to HTML: {str(e)}")
-        debug_print(f"Exception details: {traceback.format_exc()}")
-        return None, [f"Error converting {docx_file_path}: {str(e)}"]
-
-def create_csv_record(filename):
-    title = os.path.splitext(filename)[0].replace('_', ' ')
-    url_name = title.replace(' ', '-')
-    return [title, title, url_name, 'application', f"data/{filename}"]
-
-def create_csv_file(records):
-    csv_file = 'KnowledgeArticlesImport.csv'
-    with open(csv_file, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.writer(f)
-        writer.writerow(['Title', 'Summary', 'URLName', 'channels', 'Content__c'])
-        writer.writerows(records)
-    return csv_file
-
-def create_zip_file(files):
-    with zipfile.ZipFile(app.config['OUTPUT_ZIP'], 'w') as zipf:
-        for file in files:
-            zipf.write(file)
-        zipf.write('content.properties')
-        for root, _, files in os.walk(app.config['DATA_FOLDER']):
-            for file in files:
-                zipf.write(os.path.join(root, file))
-
-def clear_files():
-    for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER']]:
-        if os.path.exists(folder):
-            shutil.rmtree(folder)
-    if os.path.exists(app.config['OUTPUT_ZIP']):
-        os.remove(app.config['OUTPUT_ZIP'])
-    if os.path.exists('content.properties'):
-        os.remove('content.properties')
-
-@app.route('/', methods=['GET', 'POST'])
-def upload_file():
-    if request.method == 'POST':
-        try:
-            debug_print("File upload initiated")
-            if 'file' not in request.files:
-                debug_print("No file part in the request")
-                return redirect(request.url)
-            files = request.files.getlist('file')
-            if not files or files[0].filename == '':
-                debug_print("No selected file")
-                return redirect(request.url)
-            
-            # Clear previous data
-            clear_files()
-            debug_print("Previous files cleared")
-            
-            for folder in [app.config['UPLOAD_FOLDER'], app.config['DATA_FOLDER'], app.config['IMAGES_FOLDER']]:
-                os.makedirs(folder, exist_ok=True)
-                debug_print(f"Folder created/verified: {folder}")
-            
-            filenames = []
-            messages = []
-            for file in files:
-                if file and file.filename.endswith('.docx'):
-                    filename = secure_filename(file.filename)
-                    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(file_path)
-                    filenames.append(file_path)  # Store full path
-                    debug_print(f"File saved: {file_path}")
-                    
-                    # Verify file exists after saving
-                    if os.path.exists(file_path):
-                        debug_print(f"File verified: {file_path}")
-                    else:
-                        debug_print(f"Error: File not found after saving: {file_path}")
-            
-            create_content_properties()
-            debug_print("Content properties created")
-            
-            html_files = []
-            for file_path in filenames:
-                if not os.path.exists(file_path):
-                    debug_print(f"Error: File not found before conversion: {file_path}")
-                    continue
-                
-                html_file, msg = convert_docx_to_html(file_path)
-                if html_file:
-                    html_files.append(html_file)
-                    debug_print(f"HTML file generated: {html_file}")
-                else:
-                    debug_print(f"Failed to generate HTML for {file_path}")
-                messages.extend(msg)
-            
-            if not html_files:
-                debug_print("No HTML files were generated")
-                raise Exception("No HTML files were generated. Check the console for details.")
-            
-            csv_records = [create_csv_record(os.path.basename(html_file)) for html_file in html_files]
-            csv_file = create_csv_file(csv_records)
-            debug_print(f"CSV file created: {csv_file}")
-            
-            files_to_zip = filenames + [csv_file]
-            create_zip_file(files_to_zip)
-            debug_print(f"Zip file created: {app.config['OUTPUT_ZIP']}")
-            
-            return send_file(app.config['OUTPUT_ZIP'], as_attachment=True)
-        except Exception as e:
-            debug_print(f"An error occurred: {str(e)}")
-            debug_print(f"Exception details: {traceback.format_exc()}")
-            return f"An error occurred: {str(e)}", 500
-    
+@app.route('/')
+def index():
     return render_template('upload.html')
 
+@app.route('/', methods=['POST'])
+def upload_files():
+    if 'file' not in request.files:
+        return 'No files part'
+    files = request.files.getlist('file')
+    for file in files:
+        if file.filename.endswith('.docx'):
+            file.save(os.path.join(app.config['UPLOAD_FOLDER'], file.filename))
+    return redirect(url_for('process_files'))
+
+@app.route('/process', methods=['GET'])
+def process_files():
+    content_files = []
+    for filename in os.listdir(app.config['UPLOAD_FOLDER']):
+        if filename.endswith('.docx'):
+            process_docx(filename)
+            content_files.append(filename.replace('.docx', '.html'))
+
+    create_content_properties()
+    create_csv(content_files)
+    create_zip_file()
+
+    return redirect(url_for('download_zip'))
+
+def process_docx(filename):
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+    doc = Document(file_path)
+    
+    html_path = os.path.join(app.config['DATA_FOLDER'], filename.replace('.docx', '.html'))
+    with open(html_path, 'w', encoding='utf-8') as html_file:
+        # Use Mammoth to extract body content and convert to HTML
+        with open(file_path, "rb") as f:
+            result = mammoth.convert_to_html(f)
+            html_content = result.value
+            html_file.write(html_content)
+    
+    # Extract images
+    for i, rel in enumerate(doc.part.rels.values()):
+        if "image" in rel.reltype:
+            image_data = rel.target_part.blob
+            image_filename = f"{filename.replace('.docx', '')}_{i}.png"
+            image_path = os.path.join(app.config['IMAGES_FOLDER'], image_filename)
+            with open(image_path, "wb") as img_file:
+                img_file.write(image_data)
+
+def create_content_properties():
+    content_properties_path = os.path.join(app.config['DATA_FOLDER'], 'content.properties')
+    with open(content_properties_path, 'w') as properties_file:
+        properties_file.write("CSVEncoding=UTF8\n")
+        properties_file.write("RTAEncoding=UTF8\n")
+        properties_file.write("CSVSeparator=,\n")
+        properties_file.write("#DateFormat=yyyy-MM-dd\n")
+
+def create_csv(content_files):
+    csv_path = os.path.join(app.config['DATA_FOLDER'], 'KnowledgeArticlesImport.csv')
+    with open(csv_path, mode='w', newline='') as csv_file:
+        writer = csv.writer(csv_file, delimiter=',')
+        writer.writerow(['Title', 'Summary', 'URLName', 'Channels', 'Content__c'])
+        for content_file in content_files:
+            title = content_file.replace('.html', '').replace('_', ' ')
+            summary = title
+            urlname = title.replace(' ', '-')
+            channels = 'application'
+            content = f"data/{content_file}"
+            writer.writerow([title, summary, urlname, channels, content])
+
+def create_zip_file():
+    zip_path = os.path.join(app.config['DATA_FOLDER'], 'KnowledgeArticlesImport.zip')
+    with zipfile.ZipFile(zip_path, 'w') as zipf:
+        # Add all relevant files to the ZIP
+        for folder_name, subfolders, filenames in os.walk(app.config['DATA_FOLDER']):
+            for filename in filenames:
+                if filename != 'KnowledgeArticlesImport.zip':
+                    file_path = os.path.join(folder_name, filename)
+                    zipf.write(file_path, os.path.relpath(file_path, app.config['DATA_FOLDER']))
+
+@app.route('/download', methods=['GET'])
+def download_zip():
+    zip_path = os.path.join(app.config['DATA_FOLDER'], 'KnowledgeArticlesImport.zip')
+    return send_file(zip_path, as_attachment=True)
+
 @app.route('/clear', methods=['POST'])
-def clear_files_route():
-    clear_files()
-    return redirect(url_for('upload_file'))
+def clear_files():
+    for folder in [UPLOAD_FOLDER, DATA_FOLDER, IMAGES_FOLDER]:
+        shutil.rmtree(folder)
+        os.makedirs(folder)
+    return redirect(url_for('index'))
 
 if __name__ == '__main__':
     app.run(debug=True)
