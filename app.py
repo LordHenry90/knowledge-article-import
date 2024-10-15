@@ -62,10 +62,9 @@ def convert_docx_to_html(docx_file_path):
             return None, [f"Error: DOCX file not found: {docx_file_path}"]
         
         # Custom options for mammoth
-        options = mammoth.convert_options(
-            ignore_empty_paragraphs=False,
-            preserve_empty_paragraphs=True,
-            style_map=[
+        options = {
+            "ignore_empty_paragraphs": False,
+            "style_map": [
                 "p[style-name='Heading 1'] => h1:fresh",
                 "p[style-name='Heading 2'] => h2:fresh",
                 "p[style-name='Heading 3'] => h3:fresh",
@@ -75,12 +74,10 @@ def convert_docx_to_html(docx_file_path):
                 "r[style-name='Strong'] => strong",
                 "r[style-name='Emphasis'] => em"
             ]
-        )
+        }
         
-        image_handler = mammoth.images.data_uri
-
         with open(docx_file_path, "rb") as docx_file:
-            result = mammoth.convert_to_html(docx_file, options=options, convert_image=image_handler)
+            result = mammoth.convert_to_html(docx_file, options=options)
         
         html = result.value
         messages = result.messages
