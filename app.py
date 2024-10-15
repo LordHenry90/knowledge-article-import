@@ -117,26 +117,41 @@ def convert_docx_to_html(docx_file_path):
         # Post-processing with BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Process numbered lists
+        # Find and move the title to the beginning
+        title = soup.find('h1')
+        if title:
+            soup.body.insert(0, title.extract())
+        
+        # Process numbered lists and images
         current_list = None
-        for p in soup.find_all('p'):
-            text = p.get_text().strip()
-            if text and text[0].isdigit() and '.' in text:
-                number, content = text.split('.', 1)
-                if current_list is None or int(number) == 1:
-                    current_list = soup.new_tag('ol')
-                    p.replace_with(current_list)
-                li = soup.new_tag('li')
-                li.string = content.strip()
-                current_list.append(li)
-                
-                # Move the next image into the list item if it exists
-                next_sibling = current_list.find_next_sibling()
-                if next_sibling and next_sibling.name == 'p' and next_sibling.find('img'):
-                    li.append(next_sibling.find('img').extract())
-                    next_sibling.decompose()
-            else:
-                current_list = None
+        for element in soup.body.children:
+            if element.name == 'p':
+                text = element.get_text().strip()
+                if text and text[0].isdigit() and '.' in text:
+                    number, content = text.split('.', 1)
+                    if current_list is None or int(number) == 1:
+                        current_list = soup.new_tag('ol')
+                        element.replace_with(current_list)
+                    li = soup.new_tag('li')
+                    li.string = content.strip()
+                    current_list.append(li)
+                    
+                    # Move the next image into the list item if it exists
+                    next_element = element.next_sibling
+                    while next_element and next_element.name in ['p', 'img']:
+                        if next_element.name == 'img':
+                            li.append(next_element.extract())
+                        elif next_element.find('img'):
+                            li.append(next_element.find('img').extract())
+                            if not next_element.get_text().strip():
+                                next_element.decompose()
+                            break
+                        next_element = next_element.next_sibling
+                else:
+                    current_list = None
+            elif element.name == 'img':
+                if current_list and current_list.find_all('li'):
+                    current_list.find_all('li')[-1].append(element.extract())
         
         # Add default styling
         style = soup.new_tag('style')
@@ -161,13 +176,6 @@ def convert_docx_to_html(docx_file_path):
             soup.html.insert(0, head)
         
         soup.head.append(style)
-        
-        if soup.body is None:
-            body = soup.new_tag('body')
-            for tag in soup.html.contents:
-                if tag.name not in ['head', 'body']:
-                    body.append(tag.extract())
-            soup.html.append(body)
         
         # Save the updated HTML
         output_path = os.path.join(app.config['DATA_FOLDER'], html_file)
