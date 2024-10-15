@@ -68,7 +68,6 @@ def convert_docx_to_html(docx_file_path):
             messages = result.messages
         
         debug_print(f"Mammoth conversion completed for {docx_file_path}")
-        debug_print(f"HTML content: {html[:500]}...")  # Print first 500 characters of HTML
         
         if not html:
             debug_print(f"Mammoth produced empty HTML for {docx_file_path}")
@@ -76,10 +75,11 @@ def convert_docx_to_html(docx_file_path):
         
         soup = BeautifulSoup(html, 'html.parser')
         
-        debug_print(f"BeautifulSoup parsed HTML structure: {soup.prettify()[:500]}...")  # Print first 500 characters of parsed structure
+        # Create a dictionary to store base64 to image path mappings
+        image_mappings = {}
         
         # Process images
-        for img in soup.find_all('img'):
+        for i, img in enumerate(soup.find_all('img')):
             if img.get('src', '').startswith('data:image'):
                 # Extract image data and type
                 img_data = img['src'].split(',')[1]
@@ -89,8 +89,14 @@ def convert_docx_to_html(docx_file_path):
                 image_data = base64.b64decode(img_data)
                 img_path = save_image(image_data, f".{img_type}")
                 
-                # Update src attribute
-                img['src'] = img_path
+                # Create a placeholder
+                placeholder = f"{{{{IMAGE_PLACEHOLDER_{i}}}}}"
+                
+                # Store the mapping
+                image_mappings[placeholder] = img_path
+                
+                # Replace the src with the placeholder
+                img['src'] = placeholder
         
         debug_print(f"Image processing completed for {docx_file_path}")
         
@@ -103,36 +109,36 @@ def convert_docx_to_html(docx_file_path):
             img { max-width: 100%; height: auto; }
         """
         
-        # Check if html tag exists, if not create it
+        # Ensure proper HTML structure
         if soup.html is None:
-            debug_print("HTML tag not found, creating one")
             new_html = soup.new_tag('html')
             new_html.append(soup)
             soup = BeautifulSoup(str(new_html), 'html.parser')
         
-        # Check if head exists, if not create it
         if soup.head is None:
-            debug_print("Head tag not found, creating one")
             head = soup.new_tag('head')
             soup.html.insert(0, head)
         
         soup.head.append(style)
         
-        # Check if body exists, if not create it and move content
         if soup.body is None:
-            debug_print("Body tag not found, creating one")
             body = soup.new_tag('body')
             for tag in soup.html.contents:
                 if tag.name not in ['head', 'body']:
                     body.append(tag.extract())
             soup.html.append(body)
         
-        debug_print(f"Final HTML structure: {soup.prettify()[:500]}...")  # Print first 500 characters of final structure
+        # Convert soup back to string
+        html_content = str(soup)
+        
+        # Replace placeholders with actual image paths
+        for placeholder, img_path in image_mappings.items():
+            html_content = html_content.replace(placeholder, img_path)
         
         # Save the updated HTML
         output_path = os.path.join(app.config['DATA_FOLDER'], html_file)
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(str(soup))
+            f.write(html_content)
         
         debug_print(f"HTML file saved: {output_path}")
         
