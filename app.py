@@ -49,21 +49,20 @@ def verify_docx(file_path):
         debug_print(f"Error verifying DOCX file {file_path}: {str(e)}")
         return False
 
-def convert_docx_to_html(docx_file):
-    html_file = os.path.splitext(docx_file)[0] + '.html'
+def convert_docx_to_html(docx_file_path):
+    html_file = os.path.splitext(os.path.basename(docx_file_path))[0] + '.html'
     
     try:
-        debug_print(f"Starting conversion of {docx_file}")
-        file_path = os.path.join(app.config['UPLOAD_FOLDER'], docx_file)
+        debug_print(f"Starting conversion of {docx_file_path}")
         
-        if not os.path.exists(file_path):
-            debug_print(f"Error: DOCX file not found: {file_path}")
-            return None, [f"Error: DOCX file not found: {file_path}"]
+        if not os.path.exists(docx_file_path):
+            debug_print(f"Error: DOCX file not found: {docx_file_path}")
+            return None, [f"Error: DOCX file not found: {docx_file_path}"]
         
-        if not verify_docx(file_path):
-            return None, [f"Error: {docx_file} is not a valid DOCX file"]
+        if not verify_docx(docx_file_path):
+            return None, [f"Error: {docx_file_path} is not a valid DOCX file"]
         
-        with open(file_path, "rb") as docx:
+        with open(docx_file_path, "rb") as docx:
             result = mammoth.convert_to_html(docx)
             html = result.value
             messages = result.messages
@@ -139,9 +138,9 @@ def convert_docx_to_html(docx_file):
         
         return html_file, messages
     except Exception as e:
-        debug_print(f"Error converting {docx_file} to HTML: {str(e)}")
+        debug_print(f"Error converting {docx_file_path} to HTML: {str(e)}")
         debug_print(f"Exception details: {traceback.format_exc()}")
-        return None, [f"Error converting {docx_file}: {str(e)}"]
+        return None, [f"Error converting {docx_file_path}: {str(e)}"]
 
 def create_csv_record(filename):
     title = os.path.splitext(filename)[0].replace('_', ' ')
@@ -202,7 +201,7 @@ def upload_file():
                     filename = secure_filename(file.filename)
                     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
                     file.save(file_path)
-                    filenames.append(filename)
+                    filenames.append(file_path)  # Store full path
                     debug_print(f"File saved: {file_path}")
                     
                     # Verify file exists after saving
@@ -215,25 +214,24 @@ def upload_file():
             debug_print("Content properties created")
             
             html_files = []
-            for filename in filenames:
-                file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            for file_path in filenames:
                 if not os.path.exists(file_path):
                     debug_print(f"Error: File not found before conversion: {file_path}")
                     continue
                 
-                html_file, msg = convert_docx_to_html(filename)
+                html_file, msg = convert_docx_to_html(file_path)
                 if html_file:
                     html_files.append(html_file)
                     debug_print(f"HTML file generated: {html_file}")
                 else:
-                    debug_print(f"Failed to generate HTML for {filename}")
+                    debug_print(f"Failed to generate HTML for {file_path}")
                 messages.extend(msg)
             
             if not html_files:
                 debug_print("No HTML files were generated")
                 raise Exception("No HTML files were generated. Check the console for details.")
             
-            csv_records = [create_csv_record(html_file) for html_file in html_files]
+            csv_records = [create_csv_record(os.path.basename(html_file)) for html_file in html_files]
             csv_file = create_csv_file(csv_records)
             debug_print(f"CSV file created: {csv_file}")
             
