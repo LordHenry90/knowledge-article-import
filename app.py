@@ -79,7 +79,7 @@ def download_zip():
         return f"An error occurred: {e}", 500
 
 # Delete uploaded files and generated output
-@app.route('/delete')
+@app.route('/delete', methods=['POST'])
 def delete_files():
     try:
         # Delete uploaded files
