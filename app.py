@@ -121,8 +121,8 @@ def process_docx(file_path, output_path):
                 with open(img_path, 'wb') as img_file:
                     img_file.write(img_data)
 
-                # Replace the placeholder for the image with the correct path
-                html_content = html_content.replace(f'image_{img_counter}', f'images/{img_filename}')
+                # Replace the base64 image with the correct path
+                html_content = re.sub(r'data:image/[^;]+;base64,[^"]+', f'images/{img_filename}', html_content)
 
         # Post-process HTML to fix list numbering using BeautifulSoup
         soup = BeautifulSoup(html_content, 'html.parser')
