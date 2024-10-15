@@ -10,6 +10,8 @@ import csv
 import zipfile
 import shutil
 from bs4 import BeautifulSoup
+import uuid
+
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = os.path.abspath('uploads')
@@ -59,13 +61,29 @@ def convert_docx_to_html(docx_file_path):
             debug_print(f"Error: DOCX file not found: {docx_file_path}")
             return None, [f"Error: DOCX file not found: {docx_file_path}"]
         
-        if not verify_docx(docx_file_path):
-            return None, [f"Error: {docx_file_path} is not a valid DOCX file"]
+        # Custom options for mammoth
+        options = mammoth.convert_options(
+            ignore_empty_paragraphs=False,
+            preserve_empty_paragraphs=True,
+            style_map=[
+                "p[style-name='Heading 1'] => h1:fresh",
+                "p[style-name='Heading 2'] => h2:fresh",
+                "p[style-name='Heading 3'] => h3:fresh",
+                "p[style-name='Heading 4'] => h4:fresh",
+                "p[style-name='Heading 5'] => h5:fresh",
+                "p[style-name='Heading 6'] => h6:fresh",
+                "r[style-name='Strong'] => strong",
+                "r[style-name='Emphasis'] => em"
+            ]
+        )
         
-        with open(docx_file_path, "rb") as docx:
-            result = mammoth.convert_to_html(docx)
-            html = result.value
-            messages = result.messages
+        image_handler = mammoth.images.data_uri
+
+        with open(docx_file_path, "rb") as docx_file:
+            result = mammoth.convert_to_html(docx_file, options=options, convert_image=image_handler)
+        
+        html = result.value
+        messages = result.messages
         
         debug_print(f"Mammoth conversion completed for {docx_file_path}")
         
@@ -73,30 +91,26 @@ def convert_docx_to_html(docx_file_path):
             debug_print(f"Mammoth produced empty HTML for {docx_file_path}")
             return None, [f"Error: Empty HTML produced for {docx_file_path}"]
         
+        # Post-processing with BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Create a dictionary to store base64 to image path mappings
-        image_mappings = {}
-        
         # Process images
-        for i, img in enumerate(soup.find_all('img')):
+        for img in soup.find_all('img'):
             if img.get('src', '').startswith('data:image'):
                 # Extract image data and type
                 img_data = img['src'].split(',')[1]
                 img_type = img['src'].split(';')[0].split('/')[1]
                 
-                # Decode base64 and save image
-                image_data = base64.b64decode(img_data)
-                img_path = save_image(image_data, f".{img_type}")
+                # Generate a unique filename
+                img_filename = f"{uuid.uuid4()}.{img_type}"
+                img_path = os.path.join('images', img_filename)
                 
-                # Create a placeholder
-                placeholder = f"{{{{IMAGE_PLACEHOLDER_{i}}}}}"
+                # Save the image
+                with open(os.path.join(app.config['DATA_FOLDER'], img_path), "wb") as f:
+                    f.write(base64.b64decode(img_data))
                 
-                # Store the mapping
-                image_mappings[placeholder] = img_path
-                
-                # Replace the src with the placeholder
-                img['src'] = placeholder
+                # Update src attribute
+                img['src'] = img_path
         
         debug_print(f"Image processing completed for {docx_file_path}")
         
@@ -128,17 +142,10 @@ def convert_docx_to_html(docx_file_path):
                     body.append(tag.extract())
             soup.html.append(body)
         
-        # Convert soup back to string
-        html_content = str(soup)
-        
-        # Replace placeholders with actual image paths
-        for placeholder, img_path in image_mappings.items():
-            html_content = html_content.replace(placeholder, img_path)
-        
         # Save the updated HTML
         output_path = os.path.join(app.config['DATA_FOLDER'], html_file)
         with open(output_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
+            f.write(str(soup))
         
         debug_print(f"HTML file saved: {output_path}")
         
