@@ -121,11 +121,11 @@ def process_docx(file_path, output_path):
                     img_file.write(img_data)
                 placeholder = f'IMAGE_PLACEHOLDER_{img_counter}'
                 img_mapping[placeholder] = img_path
-                html_content = re.sub(r'data:image/[^;]+;base64,[^"]+', placeholder, html_content, count=1)
+                html_content = re.sub(r'data:image/[^;]+;base64,[^\"]+', placeholder, html_content, count=1)
 
-        # Replace placeholders with correct image paths
+        # Replace placeholders with correct image paths and ensure proper sequence
         for placeholder, img_path in img_mapping.items():
-            html_content = html_content.replace(placeholder, f'images/{os.path.basename(img_path)}')
+            html_content = html_content.replace(placeholder, f'<img src="images/{os.path.basename(img_path)}" alt="Image" />')
 
         # Create HTML file
         html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
