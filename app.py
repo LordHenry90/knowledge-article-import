@@ -8,7 +8,7 @@ import csv
 import re
 import logging
 from bs4 import BeautifulSoup
-from docx import Document
+from docx import Document, InlineShape
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -108,21 +108,17 @@ def process_docx(file_path, output_path):
         html_content = ""
         img_counter = 0
 
-        for para in doc.paragraphs:
-            html_content += f"<p>{para.text}</p>"
-
-        # Extract images from DOCX and replace them in the content
-        for rel in doc.part.rels.values():
-            if "image" in rel.target_ref:
+        for block in iter_block_items(doc):
+            if isinstance(block, InlineShape) and block.type == 3:  # Inline image
                 img_counter += 1
-                img_data = rel.target_part.blob
+                img_data = block._inline.graphic.graphicData.pic.blipFill.blip.blob
                 img_filename = f'image_{img_counter}.png'
                 img_path = os.path.join(images_path, img_filename)
                 with open(img_path, 'wb') as img_file:
                     img_file.write(img_data)
-
-                # Create an <img> tag and add it to the HTML content
                 html_content += f'<p><img src="images/{img_filename}" alt="Image {img_counter}" /></p>'
+            elif hasattr(block, 'text'):
+                html_content += f"<p>{block.text}</p>"
 
         # Create HTML file
         html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
@@ -152,6 +148,29 @@ def process_docx(file_path, output_path):
     except Exception as e:
         logging.error(f"Error occurred while processing DOCX file: {e}")
         raise
+
+# Helper function to iterate over paragraphs and images
+def iter_block_items(parent):
+    from docx.oxml.ns import qn
+    from docx.oxml import OxmlElement
+    from docx.text.paragraph import Paragraph
+    from docx.shape import InlineShape
+
+    if isinstance(parent, Document):
+        parent_elm = parent.element.body
+    else:
+        raise ValueError("Unsupported parent for iter_block_items")
+
+    for child in parent_elm:
+        if child.tag == qn('w:p'):
+            yield Paragraph(child, parent)
+        elif child.tag == qn('w:tbl'):
+            for row in child:
+                for cell in row:
+                    for sub_element in iter_block_items(cell):
+                        yield sub_element
+        elif child.tag == qn('w:drawing'):
+            yield InlineShape(OxmlElement(child), parent)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
