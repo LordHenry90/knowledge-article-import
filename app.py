@@ -8,6 +8,8 @@ import csv
 import re
 import logging
 from docx import Document
+from docx.oxml.ns import qn
+from docx.text.paragraph import Paragraph
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -18,10 +20,13 @@ logging.basicConfig(level=logging.DEBUG)
 # Upload folder
 UPLOAD_FOLDER = 'uploads'
 OUTPUT_FOLDER = 'output'
+IMAGES_FOLDER = 'output/data/images'
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 app.config['OUTPUT_FOLDER'] = OUTPUT_FOLDER
+app.config['IMAGES_FOLDER'] = IMAGES_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+os.makedirs(IMAGES_FOLDER, exist_ok=True)
 
 # Home route
 @app.route('/')
@@ -47,7 +52,7 @@ def upload():
             filename = secure_filename(file.filename)
             file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
             file.save(file_path)
-            process_docx(file_path, output_path)
+            process_docx(file_path, output_path, filename)
 
         # Zip output
         zip_path = os.path.join(OUTPUT_FOLDER, 'KnowledgeArticlesImport.zip')
@@ -88,6 +93,7 @@ def delete_files():
         # Delete generated output
         shutil.rmtree(OUTPUT_FOLDER)
         os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+        os.makedirs(IMAGES_FOLDER, exist_ok=True)
 
         return redirect(url_for('index'))
     except Exception as e:
@@ -95,12 +101,10 @@ def delete_files():
         return f"An error occurred: {e}", 500
 
 # Process DOCX file
-def process_docx(file_path, output_path):
+def process_docx(file_path, output_path, original_filename):
     try:
         root_data_path = os.path.join(output_path, 'data')
-        images_path = os.path.join(root_data_path, 'images')
         os.makedirs(root_data_path, exist_ok=True)
-        os.makedirs(images_path, exist_ok=True)
 
         # Extract content from DOCX using mammoth
         with open(file_path, "rb") as docx_file:
@@ -115,8 +119,8 @@ def process_docx(file_path, output_path):
             if "image" in rel.target_ref:
                 img_counter += 1
                 img_data = rel.target_part.blob
-                img_filename = f'image_{img_counter}.png'
-                img_path = os.path.join(images_path, img_filename)
+                img_filename = f'{original_filename}_image_{img_counter}.png'
+                img_path = os.path.join(IMAGES_FOLDER, img_filename)
                 with open(img_path, 'wb') as img_file:
                     img_file.write(img_data)
                 placeholder = f'IMAGE_PLACEHOLDER_{img_counter}'
