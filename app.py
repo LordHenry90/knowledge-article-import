@@ -10,6 +10,7 @@ import logging
 from docx import Document
 from docx.oxml.ns import qn
 from docx.text.paragraph import Paragraph
+import base64
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -79,7 +80,7 @@ def download_zip():
         return f"An error occurred: {e}", 500
 
 # Delete uploaded files and generated output
-@app.route('/delete', methods=['POST'])
+@app.route('/delete')
 def delete_files():
     try:
         # Delete uploaded files
@@ -112,6 +113,7 @@ def process_docx(file_path, output_path):
         # Extract images from DOCX
         doc = Document(file_path)
         img_counter = 0
+        img_mapping = {}  # Mapping between placeholder and image path
         html_parts = []  # To maintain sequential content and images
         for block in doc.element.body.iterchildren():
             if block.tag == qn('w:p'):
@@ -130,10 +132,17 @@ def process_docx(file_path, output_path):
                     img_path = os.path.join(images_path, img_filename)
                     with open(img_path, 'wb') as img_file:
                         img_file.write(img_data)
-                    html_parts.append(f'<img src="images/{img_filename}" alt="Image {img_counter}" />')
+                    # Convert image to base64
+                    img_base64 = base64.b64encode(img_data).decode('utf-8')
+                    placeholder = f'IMAGE_PLACEHOLDER_{img_counter}'
+                    img_mapping[placeholder] = f'<img src="images/{img_filename}" alt="Image {img_counter}" />'
+                    html_parts.append(placeholder)
 
-        # Combine all parts to form the final HTML
+        # Replace placeholders with correct image paths and ensure proper sequence
         html_content = ''.join(html_parts)
+        for placeholder, img_tag in img_mapping.items():
+            html_content = html_content.replace(placeholder, img_tag)
+
         html_content = f'<html><head><meta charset="utf-8"></head><body>{html_content}</body></html>'
 
         # Create HTML file
