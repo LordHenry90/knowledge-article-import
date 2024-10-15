@@ -66,36 +66,32 @@ def convert_docx_to_html(docx_file_path):
         os.makedirs(images_dir, exist_ok=True)
         
         def handle_image(image):
-            extension = image.content_type.split("/")[1]
-            image_filename = f"{uuid.uuid4()}.{extension}"
-            image_path = os.path.join('images', image_filename)
-            with image.open() as image_bytes, open(os.path.join(app.config['DATA_FOLDER'], image_path), "wb") as f:
-                f.write(image_bytes.read())
-            return {"src": image_path}
+            try:
+                content_type = image.content_type or 'image/png'  # Default to PNG if content_type is None
+                extension = content_type.split("/")[1]
+                image_filename = f"{uuid.uuid4()}.{extension}"
+                image_path = os.path.join('images', image_filename)
+                with image.open() as image_bytes, open(os.path.join(app.config['DATA_FOLDER'], image_path), "wb") as f:
+                    f.write(image_bytes.read())
+                debug_print(f"Image saved: {image_path}")
+                return {"src": image_path}
+            except Exception as e:
+                debug_print(f"Error handling image: {str(e)}")
+                return {"src": ""}
         
         # Options for mammoth 1.8.0
-        options = mammoth.convert_to_html.options(
-            style_map=[
-                "p[style-name='Heading 1'] => h1:fresh",
-                "p[style-name='Heading 2'] => h2:fresh",
-                "p[style-name='Heading 3'] => h3:fresh",
-                "p[style-name='Heading 4'] => h4:fresh",
-                "p[style-name='Heading 5'] => h5:fresh",
-                "p[style-name='Heading 6'] => h6:fresh",
-                "r[style-name='Strong'] => strong",
-                "r[style-name='Emphasis'] => em"
-            ],
-            ignore_empty_paragraphs=False,
-            convert_image=mammoth.images.img_element(handle_image)
-        )
+        options = {
+            "convert_image": mammoth.images.img_element(handle_image)
+        }
         
         with open(docx_file_path, "rb") as docx_file:
-            result = mammoth.convert_to_html(docx_file, options=options)
+            result = mammoth.convert_to_html(docx_file, **options)
         
         html = result.value
         messages = result.messages
         
         debug_print(f"Mammoth conversion completed for {docx_file_path}")
+        debug_print(f"Conversion messages: {messages}")
         
         if not html:
             debug_print(f"Mammoth produced empty HTML for {docx_file_path}")
