@@ -59,6 +59,14 @@ from bs4 import BeautifulSoup
 import os
 import uuid
 
+import mammoth
+from bs4 import BeautifulSoup
+import os
+import uuid
+from docx import Document
+from docx.shared import Pt
+from docx.enum.style import WD_STYLE_TYPE
+
 def convert_docx_to_html(docx_file_path):
     html_file = os.path.splitext(os.path.basename(docx_file_path))[0] + '.html'
     
@@ -87,6 +95,19 @@ def convert_docx_to_html(docx_file_path):
                 debug_print(f"Error handling image: {str(e)}")
                 return {"src": ""}
         
+        # Extract document structure using python-docx
+        doc = Document(docx_file_path)
+        structure = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                structure.append({
+                    'type': 'paragraph',
+                    'style': para.style.name,
+                    'text': para.text
+                })
+        for table in doc.tables:
+            structure.append({'type': 'table'})
+        
         # Custom style map
         style_map = """
         p[style-name='Heading 1'] => h1:fresh
@@ -95,7 +116,6 @@ def convert_docx_to_html(docx_file_path):
         p[style-name='Heading 4'] => h4:fresh
         p[style-name='Heading 5'] => h5:fresh
         p[style-name='Heading 6'] => h6:fresh
-        p[style-name='Title'] => h1:fresh
         r[style-name='Strong'] => strong
         r[style-name='Emphasis'] => em
         """
@@ -122,55 +142,38 @@ def convert_docx_to_html(docx_file_path):
         # Post-processing with BeautifulSoup
         soup = BeautifulSoup(html, 'html.parser')
         
-        # Ensure proper HTML structure
-        if soup.html is None:
-            new_html = soup.new_tag('html')
-            new_html.append(soup)
-            soup = BeautifulSoup(str(new_html), 'html.parser')
+        # Restructure content based on extracted structure
+        new_body = soup.new_tag('body')
+        for item in structure:
+            if item['type'] == 'paragraph':
+                para = soup.find('p', string=item['text'])
+                if para:
+                    new_body.append(para.extract())
+            elif item['type'] == 'table':
+                table = soup.find('table')
+                if table:
+                    new_body.append(table.extract())
         
-        if soup.body is None:
-            body = soup.new_tag('body')
-            for tag in soup.html.contents:
-                if tag.name not in ['head', 'body']:
-                    body.append(tag.extract())
-            soup.html.append(body)
-        
-        # Find and move the title to the beginning
-        title = soup.find('h1')
-        if title and soup.body:
-            soup.body.insert(0, title.extract())
-        
-        # Process numbered lists and images
         if soup.body:
-            current_list = None
-            for element in list(soup.body.children):  # Convert to list to allow modification during iteration
-                if element.name == 'p':
-                    text = element.get_text().strip()
-                    if text and text[0].isdigit() and '.' in text:
-                        number, content = text.split('.', 1)
-                        if current_list is None or int(number) == 1:
-                            current_list = soup.new_tag('ol')
-                            element.replace_with(current_list)
-                        li = soup.new_tag('li')
-                        li.string = content.strip()
-                        current_list.append(li)
-                        
-                        # Move the next image into the list item if it exists
-                        next_element = element.next_sibling
-                        while next_element and next_element.name in ['p', 'img']:
-                            if next_element.name == 'img':
-                                li.append(next_element.extract())
-                            elif next_element.find('img'):
-                                li.append(next_element.find('img').extract())
-                                if not next_element.get_text().strip():
-                                    next_element.decompose()
-                                break
-                            next_element = next_element.next_sibling
-                    else:
-                        current_list = None
-                elif element.name == 'img':
-                    if current_list and current_list.find_all('li'):
-                        current_list.find_all('li')[-1].append(element.extract())
+            soup.body.replace_with(new_body)
+        else:
+            soup.append(new_body)
+        
+        # Fix numbering and add list structure
+        current_list = None
+        for p in soup.find_all('p'):
+            text = p.text.strip()
+            if text and text[0].isdigit() and '.' in text:
+                number, content = text.split('.', 1)
+                if current_list is None:
+                    current_list = soup.new_tag('ol')
+                    p.insert_before(current_list)
+                li = soup.new_tag('li')
+                li.string = content.strip()
+                current_list.append(li)
+                p.decompose()
+            else:
+                current_list = None
         
         # Add default styling
         style = soup.new_tag('style')
@@ -178,11 +181,19 @@ def convert_docx_to_html(docx_file_path):
             body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
             h1, h2, h3, h4, h5, h6 { margin-top: 1em; margin-bottom: 0.5em; }
             p { margin-bottom: 1em; }
-            img { max-width: 100%; height: auto; margin-top: 10px; margin-bottom: 10px; }
+            img { max-width: 100%; height: auto; }
             ol { padding-left: 20px; }
             li { margin-bottom: 0.5em; }
-            strong { font-weight: bold; }
+            table { border-collapse: collapse; width: 100%; }
+            th, td { border: 1px solid #ddd; padding: 8px; }
+            th { background-color: #f2f2f2; }
         """
+        
+        # Ensure proper HTML structure
+        if soup.html is None:
+            new_html = soup.new_tag('html')
+            new_html.append(soup)
+            soup = BeautifulSoup(str(new_html), 'html.parser')
         
         if soup.head is None:
             head = soup.new_tag('head')
