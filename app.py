@@ -161,7 +161,7 @@ def iter_block_items(parent):
     else:
         raise ValueError("Unsupported parent for iter_block_items")
 
-    for child in parent_elm:
+    for child in parent_elm.iterchildren():
         if child.tag == qn('w:p'):
             yield Paragraph(child, parent)
         elif child.tag == qn('w:tbl'):
