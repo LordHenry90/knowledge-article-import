@@ -67,12 +67,12 @@ def convert_docx_to_html(docx_file_path):
             html = result.value
             messages = result.messages
         
-        debug_print(f"Mammoth conversion completed for {docx_file}")
+        debug_print(f"Mammoth conversion completed for {docx_file_path}")
         debug_print(f"HTML content: {html[:500]}...")  # Print first 500 characters of HTML
         
         if not html:
-            debug_print(f"Mammoth produced empty HTML for {docx_file}")
-            return None, [f"Error: Empty HTML produced for {docx_file}"]
+            debug_print(f"Mammoth produced empty HTML for {docx_file_path}")
+            return None, [f"Error: Empty HTML produced for {docx_file_path}"]
         
         soup = BeautifulSoup(html, 'html.parser')
         
@@ -92,7 +92,7 @@ def convert_docx_to_html(docx_file_path):
                 # Update src attribute
                 img['src'] = img_path
         
-        debug_print(f"Image processing completed for {docx_file}")
+        debug_print(f"Image processing completed for {docx_file_path}")
         
         # Add default styling
         style = soup.new_tag('style')
