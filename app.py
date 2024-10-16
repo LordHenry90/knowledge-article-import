@@ -6,8 +6,6 @@ import shutil
 import csv
 import zipfile
 import re
-from docx.oxml.ns import qn
-from docx.oxml import parse_xml
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -59,43 +57,41 @@ def process_files():
 
 def process_docx(filename):
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-    doc = Document(file_path)
-    
     html_path = os.path.join(app.config['DATA_FOLDER'], filename.replace('.docx', '.html'))
     image_mapping = {}  # Dictionary to map base64 images to file paths
-    html_content = ""
     image_index = 0
 
-    # Iterate over paragraphs and tables to maintain the order of text and images
-    for block in iter_block_items(doc):
-        if isinstance(block, str):
-            html_content += f"<p>{block}</p>"
-        elif isinstance(block, tuple):  # Image block
-            image_data = block[1]
+    # Extract images from the document and create a mapping
+    doc = Document(file_path)
+    for rel in doc.part.rels.values():
+        if "image" in rel.reltype:
+            image_data = rel.target_part.blob
             image_filename = f"{filename.replace('.docx', '')}_{image_index}.png"
             image_path = os.path.join(app.config['IMAGES_FOLDER'], image_filename)
             with open(image_path, "wb") as img_file:
                 img_file.write(image_data)
             image_mapping[f"image_{image_index}"] = f"../data/images/{image_filename}"
-            html_content += f'<p><img src="{image_mapping[f"image_{image_index}"]}" /></p>'
             image_index += 1
 
+    # Convert .docx to HTML using Mammoth
+    with open(file_path, "rb") as docx_file:
+        result = mammoth.convert_to_html(docx_file)
+        html_content = result.value
+
+    # Replace base64 images with actual image paths in the HTML content
+    def replace_base64_images(html):
+        img_tags = re.findall(r'<img [^>]*src="data:image/.*?;base64,.*?"[^>]*>', html)
+        for img_index, img_tag in enumerate(img_tags):
+            if f"image_{img_index}" in image_mapping:
+                new_img_tag = re.sub(r'src="data:image/.*?;base64,.*?"', f'src="{image_mapping[f"image_{img_index}"]}"', img_tag)
+                html = html.replace(img_tag, new_img_tag, 1)
+        return html
+
+    html_content = replace_base64_images(html_content)
+
+    # Write the processed HTML to a file
     with open(html_path, 'w', encoding='utf-8') as html_file:
         html_file.write(html_content)
-
-def iter_block_items(doc):
-    """
-    Generate a sequential stream of paragraphs and images in the order they appear in the document.
-    """
-    for block in doc.element.body:
-        if block.tag == qn('w:p'):
-            yield ''.join([node.text for node in block.iter(qn('w:t')) if node.text])
-        elif block.tag == qn('w:drawing'):
-            for pic in block.iter(qn('a:blip')):
-                r_id = pic.get(qn('r:embed'))
-                if r_id:
-                    rel = doc.part.rels[r_id]
-                    yield ('image', rel.target_part.blob)
 
 def create_content_properties():
     content_properties_path = os.path.join(app.config['DATA_FOLDER'], 'content.properties')
