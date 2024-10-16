@@ -5,6 +5,7 @@ from docx import Document
 import shutil
 import csv
 import zipfile
+import re
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -59,23 +60,22 @@ def process_docx(filename):
     doc = Document(file_path)
     
     html_path = os.path.join(app.config['DATA_FOLDER'], filename.replace('.docx', '.html'))
-    with open(html_path, 'w', encoding='utf-8') as html_file:
-        # Use Mammoth to extract body content and convert to HTML, preserving styles
-        with open(file_path, "rb") as f:
-            style_map = """
-                p[style-name='Heading 1'] => h1:fresh,
-                p[style-name='Heading 2'] => h2:fresh,
-                p[style-name='Heading 3'] => h3:fresh,
-                p[style-name='Heading 4'] => h4:fresh,
-                p[style-name='Normal'] => p:fresh,
-                p[style-name='List Paragraph'] => ul > li:fresh,
-                p[style-name='Quote'] => blockquote:fresh
-            """
-            result = mammoth.convert_to_html(f, style_map=style_map)
-            html_content = result.value
-            html_file.write(html_content)
-    
-    # Extract images
+    image_mapping = {}  # Dictionary to map base64 images to file paths
+
+    with open(file_path, "rb") as f:
+        style_map = """
+            p[style-name='Heading 1'] => h1:fresh,
+            p[style-name='Heading 2'] => h2:fresh,
+            p[style-name='Heading 3'] => h3:fresh,
+            p[style-name='Heading 4'] => h4:fresh,
+            p[style-name='Normal'] => p:fresh,
+            p[style-name='List Paragraph'] => ul > li:fresh,
+            p[style-name='Quote'] => blockquote:fresh
+        """
+        result = mammoth.convert_to_html(f, style_map=style_map)
+        html_content = result.value
+
+    # Extract images and replace base64 references with paths
     for i, rel in enumerate(doc.part.rels.values()):
         if "image" in rel.reltype:
             image_data = rel.target_part.blob
@@ -83,6 +83,15 @@ def process_docx(filename):
             image_path = os.path.join(app.config['IMAGES_FOLDER'], image_filename)
             with open(image_path, "wb") as img_file:
                 img_file.write(image_data)
+            image_placeholder = f"IMAGE_{i}"  # Placeholder to identify the image in the HTML
+            image_mapping[image_placeholder] = f"data/images/{image_filename}"
+
+    # Replace base64 images with actual image paths in the HTML content
+    for placeholder, image_path in image_mapping.items():
+        html_content = re.sub(rf'src="data:image/.*?{placeholder}.*?"', f'src="{image_path}"', html_content)
+
+    with open(html_path, 'w', encoding='utf-8') as html_file:
+        html_file.write(html_content)
 
 def create_content_properties():
     content_properties_path = os.path.join(app.config['DATA_FOLDER'], 'content.properties')
