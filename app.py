@@ -82,15 +82,20 @@ def process_docx(filename):
 
     html_content = extract_and_replace_images(html_content)
 
-    # Placeholder logic for <ol> tags
+    # Replace <ol> tags that precede images with <ul> and add sequence number to <li> tags
     def process_ordered_lists(html):
-        # Replace <ol> tags that precede an image with placeholders
-        html = re.sub(r'<ol>(?=[^<]*<img)', 'OL_PLACEHOLDER_START', html)
-        html = re.sub(r'</ol>(?=[^<]*<img)', 'OL_PLACEHOLDER_END', html)
+        # Replace <ol> with <ul> preceding images
+        html = re.sub(r'<ol>(?=.*?<img)', '<ul>', html)
+        html = re.sub(r'</ol>(?=.*?<img)', '</ul>', html)
 
-        # Replace the first and last placeholder with the appropriate <ol> tags
-        html = html.replace('OL_PLACEHOLDER_START', '<ol>', 1)
-        html = html.replace('OL_PLACEHOLDER_END', '</ol>', 1)
+        # Add sequence numbers to <li> tags
+        def add_sequence_to_li(match):
+            nonlocal li_index
+            li_index += 1
+            return f'<li>{li_index} {match.group(1)}</li>'
+
+        li_index = 0
+        html = re.sub(r'<li>(.*?)</li>', add_sequence_to_li, html)
         return html
 
     html_content = process_ordered_lists(html_content)
