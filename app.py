@@ -90,7 +90,7 @@ def process_docx(filename):
         img_tags = re.findall(r'<img [^>]*src="data:image/.*?;base64,.*?"[^>]*>', html)
         for i, img_tag in enumerate(img_tags):
             if f"mammothImage{i}" in image_mapping:
-                new_img_tag = re.sub(r'src="data:image/.*?;base64,.*?"', f'src="{image_mapping[f'mammothImage{i}']}"', img_tag)
+                new_img_tag = re.sub(r'src="data:image/.*?;base64,.*?"', f'src="{image_mapping[f"mammothImage{i}"]}"', img_tag)
                 html = html.replace(img_tag, new_img_tag)
         return html
 
