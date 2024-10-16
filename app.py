@@ -5,6 +5,7 @@ from docx import Document
 import shutil
 import csv
 import zipfile
+import base64
 import re
 
 app = Flask(__name__)
@@ -75,7 +76,7 @@ def process_docx(filename):
         result = mammoth.convert_to_html(f, style_map=style_map)
         html_content = result.value
 
-    # Extract images and replace base64 references with paths
+    # Extract images from the document
     for i, rel in enumerate(doc.part.rels.values()):
         if "image" in rel.reltype:
             image_data = rel.target_part.blob
@@ -83,12 +84,17 @@ def process_docx(filename):
             image_path = os.path.join(app.config['IMAGES_FOLDER'], image_filename)
             with open(image_path, "wb") as img_file:
                 img_file.write(image_data)
-            image_placeholder = f"IMAGE_{i}"  # Placeholder to identify the image in the HTML
-            image_mapping[image_placeholder] = f"data/images/{image_filename}"
+            image_mapping[f"image_{i}"] = f"data/images/{image_filename}"
 
     # Replace base64 images with actual image paths in the HTML content
-    for placeholder, image_path in image_mapping.items():
-        html_content = re.sub(rf'src="data:image/.*?{placeholder}.*?"', f'src="{image_path}"', html_content)
+    def replace_base64_with_path(match):
+        base64_string = match.group(1)
+        for image_id, image_path in image_mapping.items():
+            if base64_string in base64.b64encode(doc.part.rels[image_id].target_part.blob).decode():
+                return f'src="{image_path}"'
+        return match.group(0)
+
+    html_content = re.sub(r'src="data:image/.*?;base64,(.*?)"', replace_base64_with_path, html_content)
 
     with open(html_path, 'w', encoding='utf-8') as html_file:
         html_file.write(html_content)
