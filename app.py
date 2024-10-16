@@ -111,7 +111,7 @@ def create_csv(content_files):
         for content_file in content_files:
             title = content_file.replace('.html', '').replace('_', ' ')
             summary = title
-            urlname = title.replace(' ', '-')
+            urlname = re.sub(r'[^a-zA-Z0-9]+', '-', title).strip('-')
             channels = 'application'
             content = f"data/{content_file}"
             writer.writerow([title, summary, urlname, channels, content])
