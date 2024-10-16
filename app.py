@@ -60,9 +60,9 @@ def process_docx(filename):
     
     html_path = os.path.join(app.config['DATA_FOLDER'], filename.replace('.docx', '.html'))
     with open(html_path, 'w', encoding='utf-8') as html_file:
-        # Use Mammoth to extract body content and convert to HTML
+        # Use Mammoth to extract body content and convert to HTML, preserving styles
         with open(file_path, "rb") as f:
-            result = mammoth.convert_to_html(f)
+            result = mammoth.convert_to_html(f, style_map="p[style-name='Heading 1'] => h1:fresh, p[style-name='Heading 2'] => h2:fresh, p[style-name='Heading 3'] => h3:fresh, p[style-name='Normal'] => p:fresh")
             html_content = result.value
             html_file.write(html_content)
     
