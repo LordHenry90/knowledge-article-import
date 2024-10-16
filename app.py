@@ -1,11 +1,11 @@
 from flask import Flask, render_template, request, send_file, redirect, url_for
 import os
 import mammoth
-from docx import Document
 import shutil
 import csv
 import zipfile
 import re
+import base64
 
 app = Flask(__name__)
 UPLOAD_FOLDER = 'uploads'
@@ -58,36 +58,26 @@ def process_files():
 def process_docx(filename):
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     html_path = os.path.join(app.config['DATA_FOLDER'], filename.replace('.docx', '.html'))
-    image_mapping = {}  # Dictionary to map base64 images to file paths
     image_index = 0
-
-    # Extract images from the document and create a mapping
-    doc = Document(file_path)
-    for rel in doc.part.rels.values():
-        if "image" in rel.reltype:
-            image_data = rel.target_part.blob
-            image_filename = f"{filename.replace('.docx', '')}_{image_index}.png"
-            image_path = os.path.join(app.config['IMAGES_FOLDER'], image_filename)
-            with open(image_path, "wb") as img_file:
-                img_file.write(image_data)
-            image_mapping[f"image_{image_index}"] = f"../data/images/{image_filename}"
-            image_index += 1
 
     # Convert .docx to HTML using Mammoth
     with open(file_path, "rb") as docx_file:
         result = mammoth.convert_to_html(docx_file)
         html_content = result.value
 
-    # Replace base64 images with actual image paths in the HTML content
-    def replace_base64_images(html):
-        img_tags = re.findall(r'<img [^>]*src="data:image/.*?;base64,.*?"[^>]*>', html)
-        for img_index, img_tag in enumerate(img_tags):
-            if f"image_{img_index}" in image_mapping:
-                new_img_tag = re.sub(r'src="data:image/.*?;base64,.*?"', f'src="{image_mapping[f"image_{img_index}"]}"', img_tag)
-                html = html.replace(img_tag, new_img_tag, 1)
+    # Extract base64 images and save them to the images folder
+    def extract_and_replace_images(html):
+        img_tags = re.findall(r'<img [^>]*src="data:image/.*?;base64,(.*?)"[^>]*>', html)
+        for img_data in img_tags:
+            image_data = base64.b64decode(img_data)
+            image_filename = f"{filename.replace('.docx', '')}_{image_index}.png"
+            image_path = os.path.join(app.config['IMAGES_FOLDER'], image_filename)
+            with open(image_path, "wb") as img_file:
+                img_file.write(image_data)
+            html = html.replace(f"data:image/.*?;base64,{img_data}", f"../data/images/{image_filename}", 1)
         return html
 
-    html_content = replace_base64_images(html_content)
+    html_content = extract_and_replace_images(html_content)
 
     # Write the processed HTML to a file
     with open(html_path, 'w', encoding='utf-8') as html_file:
