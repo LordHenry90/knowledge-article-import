@@ -82,6 +82,16 @@ def process_docx(filename):
 
     html_content = extract_and_replace_images(html_content)
 
+    # Group <li> tags under a single <ol> to fix numbering issues
+    def group_list_items(html):
+        list_items = re.findall(r'<li>.*?</li>', html, re.DOTALL)
+        if list_items:
+            ol_content = ''.join(list_items)
+            html = re.sub(r'(?:<li>.*?</li>)+', f'<ol>{ol_content}</ol>', html, count=1)
+        return html
+
+    html_content = group_list_items(html_content)
+
     # Write the processed HTML to a file
     with open(html_path, 'w', encoding='utf-8') as html_file:
         html_file.write(html_content)
