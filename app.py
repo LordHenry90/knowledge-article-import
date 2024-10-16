@@ -75,15 +75,17 @@ def process_docx(filename):
         result = mammoth.convert_to_html(f, style_map=style_map)
         html_content = result.value
 
-    # Extract images from the document
-    for i, rel in enumerate(doc.part.rels.values()):
+    # Extract images from the document with sequential numbering
+    image_index = 0
+    for rel in doc.part.rels.values():
         if "image" in rel.reltype:
             image_data = rel.target_part.blob
-            image_filename = f"{filename.replace('.docx', '')}_{i}.png"
+            image_filename = f"{filename.replace('.docx', '')}_{image_index}.png"
             image_path = os.path.join(app.config['IMAGES_FOLDER'], image_filename)
             with open(image_path, "wb") as img_file:
                 img_file.write(image_data)
-            image_mapping[f"image_{i}"] = f"../data/images/{image_filename}"
+            image_mapping[f"image_{image_index}"] = f"../data/images/{image_filename}"
+            image_index += 1
 
     # Replace base64 images with actual image paths in the HTML content
     def replace_base64_images(html):
