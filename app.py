@@ -82,15 +82,18 @@ def process_docx(filename):
 
     html_content = extract_and_replace_images(html_content)
 
-    # Group <li> tags under a single <ol> to fix numbering issues
-    def group_list_items(html):
-        list_items = re.findall(r'<li>.*?</li>', html, re.DOTALL)
-        if list_items:
-            ol_content = ''.join(list_items)
-            html = re.sub(r'(?:<li>.*?</li>)+', f'<ol>{ol_content}</ol>', html, count=1)
+    # Placeholder logic for <ol> tags
+    def process_ordered_lists(html):
+        # Replace opening and closing <ol> tags preceding images with placeholders
+        html = re.sub(r'(<ol>)(?=.*?<img)', 'OL_PLACEHOLDER_START', html)
+        html = re.sub(r'(?<=<img.*?>)(.*?)(</ol>)', 'OL_PLACEHOLDER_END', html)
+
+        # Replace first placeholder with opening <ol> tag and last with closing <ol> tag
+        html = html.replace('OL_PLACEHOLDER_START', '<ol>', 1)
+        html = html.replace('OL_PLACEHOLDER_END', '</ol>', 1)
         return html
 
-    html_content = group_list_items(html_content)
+    html_content = process_ordered_lists(html_content)
 
     # Write the processed HTML to a file
     with open(html_path, 'w', encoding='utf-8') as html_file:
