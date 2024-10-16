@@ -86,12 +86,11 @@ def process_docx(filename):
     def process_ordered_lists(html):
         # Replace <ol> tags that precede an image with placeholders
         html = re.sub(r'<ol>(?=[^<]*<img)', 'OL_PLACEHOLDER_START', html)
-        html = re.sub(r'(?<=<img[^>]*>[^<]*)</ol>', 'OL_PLACEHOLDER_END', html)
+        html = re.sub(r'</ol>(?=[^<]*<img)', 'OL_PLACEHOLDER_END', html)
 
         # Replace the first and last placeholder with the appropriate <ol> tags
-        if 'OL_PLACEHOLDER_START' in html and 'OL_PLACEHOLDER_END' in html:
-            html = html.replace('OL_PLACEHOLDER_START', '<ol>', 1)
-            html = html[::-1].replace('DNE_REHEDLOP_LO', '</ol>', 1)[::-1]
+        html = html.replace('OL_PLACEHOLDER_START', '<ol>', 1)
+        html = html.replace('OL_PLACEHOLDER_END', '</ol>', 1)
         return html
 
     html_content = process_ordered_lists(html_content)
