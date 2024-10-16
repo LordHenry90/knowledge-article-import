@@ -83,7 +83,7 @@ def process_docx(filename):
             image_path = os.path.join(app.config['IMAGES_FOLDER'], image_filename)
             with open(image_path, "wb") as img_file:
                 img_file.write(image_data)
-            image_mapping[f"image_{i}"] = f"data/images/{image_filename}"
+            image_mapping[f"image_{i}"] = f"../data/images/{image_filename}"
 
     # Replace base64 images with actual image paths in the HTML content
     def replace_base64_images(html):
@@ -91,7 +91,7 @@ def process_docx(filename):
         for i, img_tag in enumerate(img_tags):
             new_img_tag = img_tag
             if f"image_{i}" in image_mapping:
-                new_img_tag = re.sub(r'src="data:image/.*?;base64,.*?"', f'src="{image_mapping[f"image_{i}"]}"', img_tag)
+                new_img_tag = re.sub(r'src="data:image/.*?;base64,.*?"', f'src="{image_mapping[f'image_{i}']}"', img_tag)
             html = html.replace(img_tag, new_img_tag)
         return html
 
