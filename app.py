@@ -67,6 +67,7 @@ def process_docx(filename):
 
     # Extract base64 images and save them to the images folder
     def extract_and_replace_images(html):
+        nonlocal image_index
         img_tags = re.findall(r'<img [^>]*src="data:image/.*?;base64,(.*?)"[^>]*>', html)
         print(f"img_tags found: {img_tags}")
         for img_data in img_tags:
@@ -76,7 +77,6 @@ def process_docx(filename):
             with open(image_path, "wb") as img_file:
                 img_file.write(image_data)
             html = re.sub(r'<img [^>]*src="data:image/.*?;base64,' + re.escape(img_data) + r'"[^>]*>', f'<img src="../data/images/{image_filename}" />', html, count=1)
-            nonlocal image_index
             image_index += 1
         return html
 
