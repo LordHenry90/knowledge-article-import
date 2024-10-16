@@ -88,10 +88,13 @@ def process_docx(filename):
     # Replace base64 images with actual image paths in the HTML content
     def replace_base64_images(html):
         img_tags = re.findall(r'<img [^>]*src="data:image/.*?;base64,.*?"[^>]*>', html)
-        for i, img_tag in enumerate(img_tags):
-            if f"image_{i}" in image_mapping:
-                new_img_tag = re.sub(r'src="data:image/.*?;base64,.*?"', f'src="{image_mapping[f"image_{i}"]}"', img_tag)
-                html = html.replace(img_tag, new_img_tag)
+        for img_tag in img_tags:
+            match = re.search(r'src="data:image/.*?;base64,.*?"', img_tag)
+            if match:
+                img_index = len(image_mapping) - len(img_tags) + img_tags.index(img_tag)
+                if f"image_{img_index}" in image_mapping:
+                    new_img_tag = re.sub(r'src="data:image/.*?;base64,.*?"', f'src="{image_mapping[f"image_{img_index}"]}"', img_tag)
+                    html = html.replace(img_tag, new_img_tag)
         return html
 
     html_content = replace_base64_images(html_content)
