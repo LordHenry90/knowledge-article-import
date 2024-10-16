@@ -62,7 +62,16 @@ def process_docx(filename):
     with open(html_path, 'w', encoding='utf-8') as html_file:
         # Use Mammoth to extract body content and convert to HTML, preserving styles
         with open(file_path, "rb") as f:
-            result = mammoth.convert_to_html(f, style_map="p[style-name='Heading 1'] => h1:fresh, p[style-name='Heading 2'] => h2:fresh, p[style-name='Heading 3'] => h3:fresh, p[style-name='Normal'] => p:fresh")
+            style_map = """
+                p[style-name='Heading 1'] => h1:fresh,
+                p[style-name='Heading 2'] => h2:fresh,
+                p[style-name='Heading 3'] => h3:fresh,
+                p[style-name='Heading 4'] => h4:fresh,
+                p[style-name='Normal'] => p:fresh,
+                p[style-name='List Paragraph'] => ul > li:fresh,
+                p[style-name='Quote'] => blockquote:fresh
+            """
+            result = mammoth.convert_to_html(f, style_map=style_map)
             html_content = result.value
             html_file.write(html_content)
     
